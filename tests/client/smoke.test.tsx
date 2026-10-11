@@ -7,4 +7,9 @@ describe("client test environment", () => {
 
     expect(screen.getByRole("heading", { name: "Class Points" })).toBeTruthy();
   });
+
+  // Runs after the test above (tests in a file run in order), so it fails if rendered output leaks between tests.
+  it("starts each test with an empty document body", () => {
+    expect(document.body.innerHTML).toBe("");
+  });
 });
