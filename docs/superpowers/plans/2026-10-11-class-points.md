@@ -98,8 +98,8 @@ docs/DEPLOY.md, docs/TEACHER-GUIDE.md, README.md
 | Task 2 | `src/shared/**`, `tests/shared/**` |
 | Task 3 | `src/worker/db/**`, `src/worker/lib/**`, `src/worker/app.ts`, `src/worker/index.ts`, `src/worker/routes/auth.ts`, `migrations/**`, `tests/worker/helpers.ts`, `tests/worker/auth.test.ts` |
 | Task 4 | `src/worker/routes/*` except `auth.ts`, plus `tests/worker/*` except the Task 3 files; may append route mounts in `src/worker/app.ts` |
-| Task 5 | `src/client/{main,App,router}.tsx`, `src/client/styles/**`, `src/client/lib/**`, `src/client/components/**`, `src/client/features/auth/**`, placeholder pages in the other features, `tests/client/**` |
-| Tasks 6, 7, 8, 9 | `src/client/features/{calendar,day,admin,reports}/**` |
+| Task 5 | `src/client/{main,App,router}.tsx`, `src/client/styles/**`, `src/client/lib/**`, `src/client/components/**`, `src/client/features/auth/**`, placeholder pages in the other features, `tests/client/{saveQueue,api}.test.ts`, `tests/client/test-utils.tsx` |
+| Tasks 6, 7, 8, 9 | `src/client/features/{calendar,day,admin,reports}/**` plus their own `tests/client/{calendar,day,admin,reports}.test.tsx` |
 | Task 10 | `public/**`, `scripts/**`, `docs/DEPLOY.md`, `docs/TEACHER-GUIDE.md`, `README.md`, `.github/**` |
 | Task 11 | `e2e/**`, `playwright.config.ts`, plus fixes anywhere it finds bugs, reported per fix |
 
@@ -139,7 +139,7 @@ docs/DEPLOY.md, docs/TEACHER-GUIDE.md, README.md
   - `tsconfig.test.json` includes `tests`, `e2e`.
 
 - [ ] **Step 1:** `npm init` the package with the pinned versions above (`"private": true, "type": "module"`) and run `npm install`. Expected: no peer-dependency errors (warnings about optional peers are fine).
-- [ ] **Step 2:** Write the configs. `vite.config.ts` uses `plugins: [react(), tailwindcss(), cloudflare()]` and the `resolve.alias` entries. Add `.gitattributes` (`* text=auto eol=lf`) and `.gitignore` (`node_modules`, `dist`, `.wrangler`, `.dev.vars`, `test-results`, `playwright-report`, `worker-configuration.d.ts` is **committed**).
+- [ ] **Step 2:** Write the configs. `vitest.config.ts` defines two Vitest projects: `shared` (environment node, `tests/shared/**`) and `client` (environment jsdom, `tests/client/**`, same aliases and the react plugin). Create an empty `migrations/` dir with `.gitkeep` and make the worker test setup tolerate zero migrations. `vite.config.ts` uses `plugins: [react(), tailwindcss(), cloudflare()]` and the `resolve.alias` entries. Add `.gitattributes` (`* text=auto eol=lf`) and `.gitignore` (`node_modules`, `dist`, `.wrangler`, `.dev.vars`, `test-results`, `playwright-report`, `worker-configuration.d.ts` is **committed**).
 - [ ] **Step 3:** Stubs. The worker `GET /api/health` returns `{ ok: true }`. The client renders "Class Points" with the Tailwind class `bg-mint`. Add `tests/shared/smoke.test.ts` asserting `1 + 1 === 2`, and `tests/worker/smoke.test.ts` that calls `SELF.fetch("http://x/api/health")` and expects `{ ok: true }`. Configure the workers pool from the installed `@cloudflare/vitest-pool-workers` README (its config API changed for Vitest 4; read `node_modules/@cloudflare/vitest-pool-workers/README.md` or its docs). Apply D1 migrations in a setup file via `applyD1Migrations(env.DB, env.TEST_MIGRATIONS)`, with migrations read in the config through `readD1Migrations("migrations")`.
 - [ ] **Step 4:** Verify. Run `npm run cf-typegen && npm run typecheck && npm test && npm run test:worker && npm run build`. Expected: all pass, and `dist/client/index.html` exists.
 - [ ] **Step 5:** Verify dev. Start `npm run dev`, then `curl localhost:5173/api/health` returns `{"ok":true}` and `/` returns HTML.
@@ -400,7 +400,7 @@ export const app: Hono<AppEnv>;  // basePath '/api'; middleware order: db → se
 - `PATCH /settings`: merge with the stored values, then `validatePointValues`. A violation → 400 with that message.
 - `POST /settings/recalculate` → `{ updated: n }`, setting every lesson's snapshot to the current values.
 - `POST /students` assigns avatars with `pickAvatars(n, activeAvatars)`, gives `sortOrder` continuing from the current max, and returns `Student[]`. More than 60 active students in total → 400.
-- `POST /students/:id/archive` sets `archivedAt` = UTC today, and `restore` sets it to null.
+- `POST /students/:id/archive` takes the body `{ date: ISODate }` (the client's local today; the server rejects dates after UTC-today + 1 like lessons) and sets `archivedAt = date`. `restore` sets it to null.
 - `DELETE /subjects/:id` → 409 if the subject has lessons. Archiving the last active subject → 400.
 - `POST /lessons`:
   - Validates that the subject exists and the date ≤ UTC-today + 1 (else 400 "That day hasn't come yet").
@@ -465,7 +465,7 @@ export const api: {
   changePassword(currentPassword: string, newPassword: string): Promise<void>; changePin(currentPin: string, newPin: string): Promise<void>; logoutAll(): Promise<void>;
   bootstrap(): Promise<Bootstrap>; patchSettings(p: Partial<Settings>): Promise<Settings>; recalculate(): Promise<{ updated: number }>;
   createStudents(names: string[], activeFrom: ISODate): Promise<Student[]>; patchStudent(id: number, p: Partial<Pick<Student,'name'|'avatar'|'color'|'activeFrom'>>): Promise<Student>;
-  reorderStudents(ids: number[]): Promise<void>; archiveStudent(id: number): Promise<Student>; restoreStudent(id: number): Promise<Student>; deleteStudent(id: number): Promise<void>;
+  reorderStudents(ids: number[]): Promise<void>; archiveStudent(id: number, date: ISODate): Promise<Student>; restoreStudent(id: number): Promise<Student>; deleteStudent(id: number): Promise<void>;
   createSubject(b: { name: string; emoji: string; color: ColorKey }): Promise<Subject>; patchSubject(id: number, p: Partial<Pick<Subject,'name'|'emoji'|'color'>>): Promise<Subject>;
   reorderSubjects(ids: number[]): Promise<void>; archiveSubject(id: number): Promise<Subject>; restoreSubject(id: number): Promise<Subject>; deleteSubject(id: number): Promise<void>;
   createHoliday(b: { startDate: ISODate; endDate: ISODate; label: string }): Promise<Holiday>; deleteHoliday(id: number): Promise<void>;
