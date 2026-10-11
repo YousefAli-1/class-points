@@ -1,7 +1,5 @@
-import { Hono } from "hono";
+import { app } from "./app.ts";
 
-const app = new Hono<{ Bindings: Env }>();
-
-app.get("/api/health", (c) => c.json({ ok: true }));
+export { app };
 
 export default app;
