@@ -4,8 +4,18 @@ import { ZodError } from "zod";
 import type { ApiErrorBody } from "@shared/types.ts";
 import { getDb } from "./db/client.ts";
 import { AppError } from "./lib/errors.ts";
-import { type AppEnv, loadSession } from "./lib/session.ts";
+import { type AppEnv, loadSession, requireAuth } from "./lib/session.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { backupRoutes } from "./routes/backup.ts";
+import { bootstrapRoutes } from "./routes/bootstrap.ts";
+import { calendarRoutes } from "./routes/calendar.ts";
+import { dayRoutes } from "./routes/days.ts";
+import { holidayRoutes } from "./routes/holidays.ts";
+import { lessonRoutes } from "./routes/lessons.ts";
+import { reportRoutes } from "./routes/reports.ts";
+import { settingsRoutes } from "./routes/settings.ts";
+import { studentRoutes } from "./routes/students.ts";
+import { subjectRoutes } from "./routes/subjects.ts";
 
 const db: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set("db", getDb(c.env));
@@ -51,6 +61,23 @@ app.route("/auth", authRoutes);
 
 // Data routes are mounted below this marker, each wrapped in requireAuth.
 // ROUTES
+const dataRoutes: [path: string, routes: Hono<AppEnv>][] = [
+  ["/bootstrap", bootstrapRoutes],
+  ["/settings", settingsRoutes],
+  ["/students", studentRoutes],
+  ["/subjects", subjectRoutes],
+  ["/holidays", holidayRoutes],
+  ["/calendar", calendarRoutes],
+  ["/days", dayRoutes],
+  ["/lessons", lessonRoutes],
+  ["/reports", reportRoutes],
+  ["/backup", backupRoutes],
+];
+for (const [path, routes] of dataRoutes) {
+  // `/x/*` also matches `/x` itself.
+  app.use(`${path}/*`, requireAuth);
+  app.route(path, routes);
+}
 
 app.notFound((c) => c.json<ApiErrorBody>({ error: { code: "NOT_FOUND", message: "There's nothing here." } }, 404));
 
