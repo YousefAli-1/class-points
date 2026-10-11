@@ -1,12 +1,24 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import type { Context } from "hono";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { DEFAULT_SUBJECTS } from "@shared/palette.ts";
 import { DEFAULT_POINTS } from "@shared/rules.ts";
 import type { AuthStatus } from "@shared/types.ts";
 import { app } from "@worker/app.ts";
 import { getDb } from "@worker/db/client.ts";
 import { hashSecret, sha256Hex, verifySecret } from "@worker/lib/crypto.ts";
+import {
+  AppError,
+  adminLocked,
+  badRequest,
+  conflict,
+  notFound,
+  rateLimited,
+  unauthorized,
+} from "@worker/lib/errors.ts";
 import { assertNotLocked, recordFailure, recordSuccess } from "@worker/lib/rateLimit.ts";
+import { parseJson, parseQuery } from "@worker/lib/validate.ts";
 import {
   api,
   login,
@@ -485,11 +497,134 @@ describe("csrf and headers", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("keeps the security headers on error responses", async () => {
+    const res = await api("/api/auth/login", { body: "{}", headers: { "content-type": "text/plain" } });
+
+    expect(res.status).toBe(415);
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
+    expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("answers unknown API paths with a JSON 404", async () => {
     const res = await api("/api/nope");
 
     expect(res.status).toBe(404);
     expect((await errorOf(res)).code).toBe("NOT_FOUND");
+  });
+
+  it("reports an unexpected failure as INTERNAL without its details", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const brokenDb = {
+      prepare() {
+        throw new Error("database is down");
+      },
+    } as unknown as D1Database;
+    try {
+      const res = await app.request(`${ORIGIN}/api/auth/status`, {}, { ...env, DB: brokenDb });
+
+      expect(res.status).toBe(500);
+      expect(await errorOf(res)).toEqual({ code: "INTERNAL", message: "Something went wrong. Please try again." });
+      expect(logged).toHaveBeenCalledOnce();
+    } finally {
+      logged.mockRestore();
+    }
+  });
+});
+
+describe("errors and validation", () => {
+  it("maps each error helper to its status and code", () => {
+    const cases: [AppError, number, string][] = [
+      [badRequest("Nope."), 400, "BAD_REQUEST"],
+      [unauthorized(), 401, "UNAUTHORIZED"],
+      [adminLocked(), 403, "ADMIN_LOCKED"],
+      [notFound(), 404, "NOT_FOUND"],
+      [conflict("Taken."), 409, "CONFLICT"],
+      [rateLimited(1500), 429, "RATE_LIMITED"],
+    ];
+    for (const [error, status, code] of cases) {
+      expect(error).toBeInstanceOf(AppError);
+      expect({ status: error.status, code: error.code }).toEqual({ status, code });
+    }
+    expect(rateLimited(1500).retryAfterMs).toBe(1500);
+    expect(notFound("Student").message).toBe("Student wasn't found.");
+  });
+
+  const monthQuery = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Pick a month.") });
+  const withQuery = (query: Record<string, string>) => ({ req: { query: () => query } }) as unknown as Context;
+  const withBody = (body: string) => ({ req: { json: async () => JSON.parse(body) } }) as unknown as Context;
+
+  it("parseQuery returns the parsed query or throws the first issue as BAD_REQUEST", () => {
+    expect(parseQuery(withQuery({ month: "2026-10" }), monthQuery)).toEqual({ month: "2026-10" });
+    expect(() => parseQuery(withQuery({ month: "2026-13" }), monthQuery)).toThrow(
+      expect.objectContaining({ status: 400, code: "BAD_REQUEST", message: "Pick a month." }),
+    );
+  });
+
+  it("parseJson returns the parsed body or throws BAD_REQUEST", async () => {
+    expect(await parseJson(withBody('{"month":"2026-10"}'), monthQuery)).toEqual({ month: "2026-10" });
+    await expect(parseJson(withBody('{"month":"10/2026"}'), monthQuery)).rejects.toMatchObject({
+      status: 400,
+      code: "BAD_REQUEST",
+      message: "Pick a month.",
+    });
+    await expect(parseJson(withBody("{not json"), monthQuery)).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("database constraints", () => {
+  const insertSubject = () =>
+    sql("INSERT INTO subjects (name, emoji, color, sort_order) VALUES ('Art', '🎨', 'coral', 0)").run();
+  const insertLesson = (subjectId: number) =>
+    sql(
+      "INSERT INTO lessons (date, subject_id, points_clean, points_warning, points_penalty, created_at) VALUES ('2026-10-05', ?, 1, 0, -1, 0)",
+      subjectId,
+    ).run();
+  const insertStudent = () =>
+    sql(
+      "INSERT INTO students (name, avatar, color, sort_order, active_from, created_at) VALUES ('Ali', '🦊', 'sky', 0, '2026-09-01', 0)",
+    ).run();
+
+  it("allows only one teacher row and one settings row", async () => {
+    await expect(
+      sql("INSERT INTO teacher (id, name, password_hash, pin_hash, created_at) VALUES (2, 'X', 'h', 'h', 0)").run(),
+    ).rejects.toThrow(/CHECK constraint failed/);
+    await expect(
+      sql(
+        "INSERT INTO settings (id, class_name, points_clean, points_warning, points_penalty, school_days, sound_on, reports_need_pin) VALUES (2, 'C', 1, 0, -1, '[1]', 1, 0)",
+      ).run(),
+    ).rejects.toThrow(/CHECK constraint failed/);
+  });
+
+  it("keeps one lesson per date and subject", async () => {
+    const subjectId = (await insertSubject()).meta.last_row_id;
+    await insertLesson(subjectId);
+
+    await expect(insertLesson(subjectId)).rejects.toThrow(/UNIQUE constraint failed/);
+  });
+
+  it("accepts only the four mark statuses and cascades deletes to marks", async () => {
+    const subjectId = (await insertSubject()).meta.last_row_id;
+    const lessonId = (await insertLesson(subjectId)).meta.last_row_id;
+    const first = (await insertStudent()).meta.last_row_id;
+    const second = (await insertStudent()).meta.last_row_id;
+    const mark = (studentId: number, status: string) =>
+      sql(
+        "INSERT INTO marks (lesson_id, student_id, status, updated_at) VALUES (?, ?, ?, 0)",
+        lessonId,
+        studentId,
+        status,
+      ).run();
+
+    await expect(mark(first, "excellent")).rejects.toThrow(/CHECK constraint failed/);
+    await mark(first, "warning");
+    await mark(second, "absent");
+    const markCount = () => sql("SELECT count(*) AS n FROM marks").first<number>("n");
+
+    await sql("DELETE FROM students WHERE id = ?", first).run();
+    expect(await markCount()).toBe(1);
+    await sql("DELETE FROM lessons WHERE id = ?", lessonId).run();
+    expect(await markCount()).toBe(0);
   });
 });
 
