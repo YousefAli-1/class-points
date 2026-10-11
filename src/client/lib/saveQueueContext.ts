@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import { toast } from "sonner";
-import type { DayResponse, ISODate, MarkStatus } from "@shared/types.ts";
+import type { DayResponse, ISODate, Mark, MarkStatus } from "@shared/types.ts";
 import { ApiError, api } from "./api.ts";
 import { withMarks } from "./dayCache.ts";
 import { qk } from "./queryKeys.ts";
@@ -42,13 +42,23 @@ function browserStorage(): Pick<Storage, "getItem" | "setItem"> {
   }
 }
 
+/** Puts the server's copy of a saved mark into the cached day. */
+function applySaved(qc: QueryClient, date: ISODate, saved: Mark | undefined): void {
+  const key = qk.day(date);
+  // A load of this day that started before the save may answer without it, and the tap is no
+  // longer pending to cover for it. Start that load again so the stale answer is thrown away.
+  if (qc.getQueryState(key)?.fetchStatus === "fetching") {
+    void qc.refetchQueries({ queryKey: key, exact: true }, { cancelRefetch: true });
+  }
+  // The server keeps the newest write (last write wins), which may be another device's.
+  if (saved && typeof saved.status === "string") {
+    qc.setQueryData<DayResponse>(key, (day) => day && withMarks(day, [saved]));
+  }
+}
+
 async function sendMark(qc: QueryClient, m: QueuedMark): Promise<SendResult> {
   try {
-    const saved = await api.putMark(m.lessonId, m.studentId, m.status, m.clientTs);
-    // The server keeps the newest write (last write wins), which may be another device's.
-    if (saved && typeof saved.status === "string") {
-      qc.setQueryData<DayResponse>(qk.day(m.date), (day) => day && withMarks(day, [saved]));
-    }
+    applySaved(qc, m.date, await api.putMark(m.lessonId, m.studentId, m.status, m.clientTs));
     return "ok";
   } catch (error) {
     if (!(error instanceof ApiError)) return "retry";

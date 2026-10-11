@@ -1,1 +1,239 @@
 @import "tailwindcss";
+
+/*
+ * Class Points design tokens (spec §9). The ten palette colours are exact; the "-deep", "-soft"
+ * and neutral shades are derived from them for the chunky 3D edges and for text that has to pass
+ * WCAG AA (leaf, honey and card red are too light for small text on white).
+ */
+@theme {
+  /* Palette (Global Constraints) */
+  --color-forest: #14532D;
+  --color-leaf: #22A55B;
+  --color-sprout: #86E0A7;
+  --color-mint: #EEF9F1;
+  --color-white: #FFFFFF;
+  --color-sunshine: #FFD23F;
+  --color-honey: #B7791F;
+  --color-card-red: #E5383B;
+  --color-coral: #F26B5B;
+  --color-ink: #12301F;
+
+  /* Derived shades */
+  --color-forest-deep: #0B3A1E;
+  --color-leaf-deep: #147538; /* green text: 5.8:1 on white, 5.0:1 on sprout-soft; edge under leaf buttons */
+  --color-sprout-soft: #D7F5E2;
+  --color-mint-deep: #DCF1E3;
+  --color-line: #CBE7D5; /* hairlines and outlines */
+  --color-line-deep: #A9D8BA; /* edge under white buttons */
+  --color-sunshine-soft: #FFF5CC;
+  --color-sunshine-deep: #E0A800;
+  --color-honey-deep: #8A5A12; /* amber text: 5.9:1 on white, 5.4:1 on sunshine-soft; edge under amber buttons */
+  --color-card-red-soft: #FDE6E6;
+  --color-card-red-deep: #B42318; /* red text: 6.6:1 on white, 5.5:1 on card-red-soft */
+  --color-muted: #4E6357; /* secondary text: 6.5:1 on white, 6.0:1 on mint */
+  --color-mist: #E4ECE7; /* off / disabled surfaces */
+
+  --font-display: "Fredoka Variable", "Fredoka", ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+  --font-body: "Nunito Variable", "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-body);
+
+  --radius-btn: 1.125rem; /* 18px */
+  --radius-card: 1.5rem; /* 24px */
+  --radius-blob: 1.75rem; /* 28px */
+
+  --shadow-soft: 0 1px 0 0 rgb(255 255 255 / 0.7) inset, 0 14px 30px -18px rgb(20 83 45 / 0.45),
+    0 2px 6px -2px rgb(20 83 45 / 0.12);
+  --shadow-pop: 0 24px 60px -24px rgb(18 48 31 / 0.55), 0 4px 14px -6px rgb(18 48 31 / 0.2);
+
+  --animate-shake: cp-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  --animate-pop-in: cp-pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-fade-in: cp-fade-in 0.18s ease-out both;
+  --animate-bob: cp-bob 3.2s ease-in-out infinite;
+  --animate-float-up: cp-float-up 2.4s ease-in infinite;
+  --animate-wave: cp-wave 1.6s ease-in-out infinite;
+  --animate-hop: cp-hop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+  --animate-sway: cp-sway 4s ease-in-out infinite;
+
+  @keyframes cp-shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(4px); }
+    30%, 50%, 70% { transform: translateX(-7px); }
+    40%, 60% { transform: translateX(7px); }
+  }
+  @keyframes cp-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes cp-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes cp-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  @keyframes cp-float-up {
+    0% { opacity: 0; transform: translate(0, 4px) scale(0.8); }
+    25% { opacity: 1; }
+    100% { opacity: 0; transform: translate(6px, -14px) scale(1.1); }
+  }
+  @keyframes cp-wave {
+    0%, 100% { transform: rotate(0deg); }
+    20% { transform: rotate(-24deg); }
+    40% { transform: rotate(6deg); }
+    60% { transform: rotate(-20deg); }
+    80% { transform: rotate(2deg); }
+  }
+  @keyframes cp-hop {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-6px); }
+  }
+  @keyframes cp-sway {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+}
+
+/*
+ * The physical "chunky" look: a darker edge under the element that it presses into by 2px when
+ * tapped (spec §9). Set the edge colour with `[--edge:var(--color-…)]`.
+ */
+@utility chunky {
+  --chunky-depth: 4px;
+  box-shadow:
+    0 var(--chunky-depth) 0 0 var(--edge, var(--color-line-deep)),
+    0 calc(var(--chunky-depth) + 8px) 18px -10px rgb(18 48 31 / 0.35);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out,
+    background-color 150ms ease-out,
+    filter 150ms ease-out;
+
+  &:active:not(:disabled, [aria-disabled="true"]) {
+    transform: translateY(2px);
+    box-shadow:
+      0 calc(var(--chunky-depth) - 2px) 0 0 var(--edge, var(--color-line-deep)),
+      0 calc(var(--chunky-depth) + 4px) 12px -10px rgb(18 48 31 / 0.35);
+  }
+
+  /* Reduced motion: no movement, only a colour change on press. */
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled, [aria-disabled="true"]) {
+      transform: none;
+      box-shadow:
+        0 var(--chunky-depth) 0 0 var(--edge, var(--color-line-deep)),
+        0 calc(var(--chunky-depth) + 8px) 18px -10px rgb(18 48 31 / 0.35);
+      filter: brightness(0.92);
+    }
+  }
+}
+
+/* A flat edge with no press effect, for the PIN pad (nothing on a mirrored screen may hint which key was hit). */
+@utility chunky-still {
+  box-shadow:
+    0 4px 0 0 var(--edge, var(--color-line-deep)),
+    0 12px 18px -10px rgb(18 48 31 / 0.35);
+}
+
+/* Safe-area aware gutters (iPad home indicator, notched phones in landscape). */
+@utility px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@utility pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    background-color: var(--color-mint);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-mint);
+    background-image: radial-gradient(1100px 520px at 50% -12%, rgb(255 255 255 / 0.9), transparent 70%);
+    background-repeat: no-repeat;
+    overscroll-behavior-y: none;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--color-forest);
+  }
+
+  button,
+  [role="button"],
+  a,
+  input,
+  label,
+  select,
+  summary,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-forest);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: var(--color-sprout);
+    color: var(--color-ink);
+  }
+
+  /* Radix dialogs: a gentle pop in (just a fade with reduced motion). */
+  [data-cp-dialog][data-state="open"] {
+    animation: var(--animate-pop-in);
+  }
+  [data-cp-overlay][data-state="open"] {
+    animation: var(--animate-fade-in);
+  }
+  [data-cp-popover][data-state="open"] {
+    animation: var(--animate-fade-in);
+  }
+}
+
+/* Reduced motion safety net: nothing moves; colours may still fade (Global Constraints). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-property: color, background-color, border-color, outline-color, fill, stroke, opacity, filter !important;
+  }
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  [data-print-hide] {
+    display: none !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
