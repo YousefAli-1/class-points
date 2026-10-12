@@ -15,7 +15,7 @@ import type { Db } from "../db/client.ts";
 import { authAttempts, sessions, settings, subjects, teacher } from "../db/schema.ts";
 import { hashSecret, safeEqual, verifySecret } from "../lib/crypto.ts";
 import { type AppError, badRequest, conflict, setupDisabled, unauthorized } from "../lib/errors.ts";
-import { assertNotLocked, recordFailure, recordSuccess } from "../lib/rateLimit.ts";
+import { addressBucket, forgetAttempts, reserveAttempt } from "../lib/rateLimit.ts";
 import {
   type AppEnv,
   clearSessionCookie,
@@ -30,7 +30,7 @@ import {
 import { parseJson } from "../lib/validate.ts";
 
 // Spec §5 and §6. Every successful response is the new AuthStatus, so the client can
-// store it as-is. Wrong secrets count towards the `kind:ip` brute-force lock.
+// store it as-is. Every guess at a secret counts towards the `kind:address` brute-force lock.
 
 type Ctx = Context<AppEnv>;
 type AttemptKind = "login" | "pin" | "reset" | "setup";
@@ -51,8 +51,9 @@ async function sessionTeacher(db: Db) {
   return row;
 }
 
-function clientIp(c: Ctx): string {
-  return c.req.header("cf-connecting-ip") ?? "unknown";
+/** The brute-force lock's key: the kind of secret and the client's address (IPv6 by /64). */
+function attemptKey(c: Ctx, kind: AttemptKind): string {
+  return `${kind}:${addressBucket(c.req.header("cf-connecting-ip") ?? "unknown")}`;
 }
 
 function statusOf(c: Ctx, setupDone: boolean): AuthStatus {
@@ -61,7 +62,10 @@ function statusOf(c: Ctx, setupDone: boolean): AuthStatus {
   return { setupDone, loggedIn: session !== null, adminUnlocked: adminUntil !== null, adminUntil };
 }
 
-/** Checks a secret under the brute-force lock: a mismatch counts a failure and throws `wrong()`. */
+/**
+ * Checks a secret under the brute-force lock. The guess is counted before the check (so parallel
+ * guesses can't slip past the lock), a mismatch throws `wrong()`, and a match clears the count.
+ */
 async function checkSecret(
   c: Ctx,
   kind: AttemptKind,
@@ -69,14 +73,11 @@ async function checkSecret(
   wrong: () => AppError,
 ): Promise<void> {
   const db = c.get("db");
-  const key = `${kind}:${clientIp(c)}`;
+  const key = attemptKey(c, kind);
   const now = Date.now();
-  await assertNotLocked(db, key, now);
-  if (!(await matches())) {
-    await recordFailure(db, key, now);
-    throw wrong();
-  }
-  await recordSuccess(db, key);
+  await reserveAttempt(db, key, now);
+  if (!(await matches())) throw wrong();
+  await forgetAttempts(db, key, now);
 }
 
 authRoutes.get("/status", async (c) => {
@@ -148,12 +149,11 @@ authRoutes.post("/reset", async (c) => {
   await checkSecret(c, "reset", () => safeEqual(body.setupCode, setupCode), () => unauthorized(WRONG_SETUP_CODE));
 
   const [passwordHash, pinHash] = await Promise.all([hashSecret(body.newPassword), hashSecret(body.newPin)]);
-  const ip = clientIp(c);
   await db.batch([
     db.update(teacher).set({ passwordHash, pinHash }).where(eq(teacher.id, 1)),
     db.delete(sessions),
     // Lift any lock she ran into while trying to remember them.
-    db.delete(authAttempts).where(inArray(authAttempts.key, [`login:${ip}`, `pin:${ip}`])),
+    db.delete(authAttempts).where(inArray(authAttempts.key, [attemptKey(c, "login"), attemptKey(c, "pin")])),
   ]);
   await startSession(c);
   return c.json(statusOf(c, true));

@@ -29,7 +29,7 @@ export const sessions = sqliteTable("sessions", {
 });
 
 export const authAttempts = sqliteTable("auth_attempts", {
-  /** `kind:ip`, e.g. `login:203.0.113.7`. */
+  /** `kind:address`, e.g. `login:203.0.113.7` or `pin:2001:db8:1:2::/64` (IPv6 counts per /64). */
   key: text("key").primaryKey(),
   failures: integer("failures").notNull().default(0),
   lockedUntil: integer("locked_until"),

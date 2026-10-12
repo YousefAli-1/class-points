@@ -17,7 +17,7 @@ import {
   rateLimited,
   unauthorized,
 } from "@worker/lib/errors.ts";
-import { assertNotLocked, recordFailure, recordSuccess } from "@worker/lib/rateLimit.ts";
+import { addressBucket, forgetAttempts, reserveAttempt } from "@worker/lib/rateLimit.ts";
 import { parseJson, parseQuery } from "@worker/lib/validate.ts";
 import {
   api,
@@ -187,6 +187,37 @@ describe("login and logout", () => {
 
     expect((await fromIp("203.0.113.1", PASSWORD)).status).toBe(429);
     expect((await fromIp("203.0.113.2", PASSWORD)).status).toBe(200);
+  });
+
+  it("counts IPv6 failures per /64, so a new address in the same network is still locked", async () => {
+    const fromIp = (ip: string, password: string) =>
+      api("/api/auth/login", { body: { password }, headers: { "cf-connecting-ip": ip } });
+    // One host can use any of the 2^64 addresses in its /64.
+    for (let i = 1; i <= 5; i++) expect((await fromIp(`2001:db8:1:2::${i}`, "wrong-password")).status).toBe(401);
+
+    expect((await fromIp("2001:db8:1:2:ffff:ffff:ffff:ffff", PASSWORD)).status).toBe(429);
+    expect((await fromIp("2001:0DB8:0001:0002:0:0:0:99", PASSWORD)).status).toBe(429);
+    expect((await fromIp("2001:db8:1:3::1", PASSWORD)).status).toBe(200);
+  });
+
+  it("a burst of parallel wrong logins gets no more than 5 guesses", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => api("/api/auth/login", { body: { password: "wrong-password" } })),
+    );
+    const statuses = results.map((r) => r.status).sort();
+
+    expect(statuses).toEqual([401, 401, 401, 401, 401, 429, 429, 429, 429, 429]);
+    expect((await api("/api/auth/login", { body: { password: PASSWORD } })).status).toBe(429);
+  });
+
+  it("a burst of parallel wrong PINs gets no more than 5 guesses", async () => {
+    const cookie = await login();
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => api("/api/auth/unlock", { body: { pin: "9999" } }, cookie)),
+    );
+
+    expect(results.filter((r) => r.status === 401)).toHaveLength(5);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(5);
   });
 
   it("a successful login resets the failure count", async () => {
@@ -433,6 +464,22 @@ describe("reset", () => {
     await unlock(cookie, "8642");
   });
 
+  it("lifts the login lock she ran into, for her whole IPv6 /64", async () => {
+    await setupTeacher();
+    const from = (ip: string) => ({ "cf-connecting-ip": ip });
+    for (let i = 0; i < 5; i++) {
+      await api("/api/auth/login", { body: { password: "wrong-password" }, headers: from("2001:db8:7:7::1") });
+    }
+    const res = await api("/api/auth/reset", {
+      body: { setupCode: SETUP_CODE, newPassword: "brand-new-pass", newPin: "8642" },
+      headers: from("2001:db8:7:7::2"),
+    });
+
+    expect(res.status).toBe(200);
+    const again = await api("/api/auth/login", { body: { password: "brand-new-pass" }, headers: from("2001:db8:7:7::3") });
+    expect(again.status).toBe(200);
+  });
+
   it("rejects a wrong setup code and keeps the password", async () => {
     await setupTeacher();
     const res = await api("/api/auth/reset", {
@@ -643,45 +690,96 @@ describe("crypto", () => {
 
 describe("rate limit", () => {
   const key = "login:198.51.100.9";
-  const failTimes = async (db: ReturnType<typeof getDb>, n: number, now: number) => {
-    for (let i = 0; i < n; i++) await recordFailure(db, key, now);
-  };
-  const lockedFor = async (db: ReturnType<typeof getDb>, now: number): Promise<number | null> => {
-    try {
-      await assertNotLocked(db, key, now);
-      return null;
-    } catch (e) {
-      return (e as { retryAfterMs: number }).retryAfterMs;
+  type Db = ReturnType<typeof getDb>;
+
+  /** Makes `n` guesses at `now`; returns how many were let through to the secret check. */
+  const guess = async (db: Db, n: number, now: number, k = key) => {
+    let allowed = 0;
+    for (let i = 0; i < n; i++) {
+      try {
+        await reserveAttempt(db, k, now);
+        allowed++;
+      } catch (e) {
+        expect(e).toMatchObject({ code: "RATE_LIMITED" });
+      }
     }
+    return allowed;
+  };
+  /** How long `key` stays locked after `now`, read straight from the table. */
+  const lockedFor = async (now: number, k = key): Promise<number | null> => {
+    const until = await sql("SELECT locked_until FROM auth_attempts WHERE key = ?", k).first<number | null>("locked_until");
+    return until != null && until > now ? until - now : null;
   };
 
   it("locks for 5 minutes, doubling each time up to 1 hour", async () => {
     const db = getDb(env);
     let now = 1_000_000;
-    await failTimes(db, 4, now);
-    expect(await lockedFor(db, now)).toBeNull();
-    await failTimes(db, 1, now);
-    expect(await lockedFor(db, now)).toBe(5 * MINUTE);
-    expect(await lockedFor(db, now + 5 * MINUTE - 1)).toBe(1);
+    expect(await guess(db, 4, now)).toBe(4);
+    expect(await lockedFor(now)).toBeNull();
+    // The fifth guess is still checked, and it starts the lock straight away.
+    expect(await guess(db, 1, now)).toBe(1);
+    expect(await lockedFor(now)).toBe(5 * MINUTE);
+    await expect(reserveAttempt(db, key, now + 5 * MINUTE - 1)).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      retryAfterMs: 1,
+    });
     now += 5 * MINUTE;
-    expect(await lockedFor(db, now)).toBeNull();
 
     for (const minutes of [10, 20, 40, 60, 60]) {
-      await failTimes(db, 5, now);
-      expect(await lockedFor(db, now)).toBe(minutes * MINUTE);
+      expect(await guess(db, 8, now)).toBe(5);
+      expect(await lockedFor(now)).toBe(minutes * MINUTE);
       now += minutes * MINUTE;
-      expect(await lockedFor(db, now)).toBeNull();
     }
   });
 
   it("success resets the count and the lock level", async () => {
     const db = getDb(env);
     const now = 1_000_000;
-    await failTimes(db, 5, now);
-    await recordSuccess(db, key);
+    expect(await guess(db, 6, now)).toBe(5);
+    await forgetAttempts(db, key, now);
 
-    expect(await lockedFor(db, now)).toBeNull();
-    await failTimes(db, 5, now);
-    expect(await lockedFor(db, now)).toBe(5 * MINUTE);
+    expect(await lockedFor(now)).toBeNull();
+    expect(await guess(db, 6, now)).toBe(5);
+    expect(await lockedFor(now)).toBe(5 * MINUTE);
+  });
+
+  it("a right fifth guess lifts the lock it started", async () => {
+    const db = getDb(env);
+    const now = 1_000_000;
+    expect(await guess(db, 5, now)).toBe(5);
+    await forgetAttempts(db, key, now);
+
+    expect(await guess(db, 4, now)).toBe(4);
+    expect(await lockedFor(now)).toBeNull();
+  });
+
+  it("a success also sweeps locks that ended more than a day ago", async () => {
+    const db = getDb(env);
+    const now = 10 * DAY;
+    const stale = "pin:203.0.113.50";
+    const recent = "pin:203.0.113.51";
+    await guess(db, 5, now - DAY - 5 * MINUTE - 1, stale);
+    await guess(db, 5, now - DAY, recent);
+    await guess(db, 2, now, "setup:203.0.113.52");
+
+    await forgetAttempts(db, key, now);
+
+    const keys = await sql("SELECT key FROM auth_attempts ORDER BY key").all<{ key: string }>();
+    expect(keys.results.map((r) => r.key)).toEqual([recent, "setup:203.0.113.52"]);
+  });
+
+  it("buckets IPv6 addresses by /64 and leaves IPv4 alone", () => {
+    expect(addressBucket("203.0.113.7")).toBe("203.0.113.7");
+    expect(addressBucket("unknown")).toBe("unknown");
+    expect(addressBucket("::ffff:203.0.113.7")).toBe("203.0.113.7");
+    expect(addressBucket("2001:db8:1:2:3:4:5:6")).toBe("2001:db8:1:2::/64");
+    expect(addressBucket("2001:0DB8:0001:0002:0000:0000:0000:0001")).toBe("2001:db8:1:2::/64");
+    expect(addressBucket("2001:db8:1:2::abcd")).toBe("2001:db8:1:2::/64");
+    expect(addressBucket("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(addressBucket("2001:db8:1::")).toBe("2001:db8:1:0::/64");
+    expect(addressBucket("::1")).toBe("0:0:0:0::/64");
+    expect(addressBucket("::2:3:4:5:6:7:8")).toBe("0:2:3:4::/64");
+    expect(addressBucket("64:ff9b::192.0.2.1")).toBe("64:ff9b:0:0::/64");
+    expect(addressBucket("::1:2:3:4:192.0.2.1")).toBe("0:0:1:2::/64");
   });
 });
