@@ -40,7 +40,8 @@ test("start the English lesson, give Lina a warning and a penalty, reload: still
 
   const footer = page.getByRole("list", { name: "Lesson so far" });
   await expect(footer).toContainText("23");
-  await expect(footer).toContainText("0 warnings");
+  // Her Penalty comes with a Warning card, so she counts under both (as in the reports).
+  await expect(footer).toContainText("1 warning");
   await expect(footer).toContainText("1 penalty");
   await expect(saveIndicator(page)).toHaveText("All saved");
 

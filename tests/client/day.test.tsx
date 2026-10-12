@@ -169,6 +169,27 @@ describe("Day view", () => {
     expect(screen.getByRole("button", { name: "Warning for Ali" })).toHaveProperty("disabled", false);
   });
 
+  it("footer counts every Warning card, penalties included, like the reports", async () => {
+    // Ali has a Warning, Bea has a Warning and a Penalty: two Warning cards are on screen.
+    renderDay({
+      ...startedDay,
+      lessons: [
+        {
+          ...startedDay.lessons[0],
+          marks: { 1: { status: "warning", updatedAt: 1 }, 2: { status: "penalty", updatedAt: 1 } },
+        },
+      ],
+    });
+    const tally = await screen.findByRole("list", { name: "Lesson so far" });
+
+    expect(within(tally).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "⭐ 0 with no cards",
+      "🟥 2 warnings",
+      "🟥🟥 1 penalty",
+      "🏠 0 absent",
+    ]);
+  });
+
   it("not-started subject shows Start button", async () => {
     renderDay(startedDay, `/day/${DAY}?subject=2`);
     expect(await screen.findByRole("button", { name: /Start Mathematics lesson/ })).toBeTruthy();

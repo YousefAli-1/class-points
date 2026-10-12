@@ -2,7 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import { dayKind, holidayOn, monthOf, type DayKind } from "@shared/dates.ts";
-import { applyAction, isEligible, type MarkAction, type TransitionResult } from "@shared/rules.ts";
+import {
+  applyAction,
+  hasPenaltyCard,
+  hasWarningCard,
+  isEligible,
+  type MarkAction,
+  type TransitionResult,
+} from "@shared/rules.ts";
 import type { DayLesson, DayResponse, ISODate, MarkStatus, Student, Subject } from "@shared/types.ts";
 import { api } from "../../lib/api.ts";
 import { useBootstrap, useDay, useToday } from "../../lib/queries.ts";
@@ -12,6 +19,7 @@ import { useSound, type SoundName } from "../../lib/sound.ts";
 
 export interface DayCounts {
   clean: number;
+  /** Students with a Warning card, including those that also have a Penalty. */
   warnings: number;
   penalties: number;
   absent: number;
@@ -162,14 +170,15 @@ export function useDayModel(date: ISODate): DayModel {
   const kind = dayKind(date, today, settings?.schoolDays ?? [0, 1, 2, 3, 4, 5, 6], holidays);
   const holidayLabel = kind === "holiday" ? (holidayOn(date, holidays)?.label ?? null) : null;
 
+  // Counted like the reports (shared/report.ts): a Penalty always comes with a Warning card.
   const counts = useMemo(() => {
     const c: DayCounts = { clean: 0, warnings: 0, penalties: 0, absent: 0 };
     for (const s of students) {
       const status = lesson?.marks[s.id]?.status ?? "clean";
       if (status === "clean") c.clean++;
-      else if (status === "warning") c.warnings++;
-      else if (status === "penalty") c.penalties++;
-      else c.absent++;
+      if (status === "absent") c.absent++;
+      if (hasWarningCard(status)) c.warnings++;
+      if (hasPenaltyCard(status)) c.penalties++;
     }
     return c;
   }, [students, lesson]);
