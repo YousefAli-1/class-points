@@ -117,7 +117,8 @@ function DayView({ date, today }: { date: ISODate; today: ISODate }) {
         startedSubjectIds={model.startedSubjectIds}
       />
       {body()}
-      {model.lesson && subject && model.students.length > 0 && (
+      {/* Also with no students on the day, so a lesson started there by mistake can be cancelled. */}
+      {model.lesson && subject && (
         <DayFooter counts={model.counts} subjectName={subject.name} onCancelLesson={model.cancelLesson} />
       )}
     </section>

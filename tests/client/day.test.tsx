@@ -189,6 +189,18 @@ describe("Day view", () => {
     expect(screen.getByRole("combobox", { name: "Subject" }).textContent).toContain("Mathematics");
   });
 
+  it("a lesson on a day before the class counts can still be cancelled", async () => {
+    const early = "2026-08-30"; // before everyone's activeFrom
+    const { qc } = renderDay(startedDay, `/day/${early}`);
+    qc.setQueryData<DayResponse>(qk.day(early), {
+      date: early,
+      lessons: [{ ...startedDay.lessons[0], id: 9, date: early }],
+    });
+
+    expect(await screen.findByText("No students on this day")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "More lesson options" })).toBeTruthy();
+  });
+
   it("redirects future dates home", async () => {
     renderDay(startedDay, "/day/2026-10-13");
     expect(await screen.findByText("calendar home")).toBeTruthy();
