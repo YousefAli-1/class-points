@@ -59,6 +59,23 @@ describe("api client", () => {
     await expect(api.authStatus()).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
   });
 
+  it("non-JSON 2xx body becomes ApiError INTERNAL", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("<html>Proxy says hi</html>", { status: 200 }));
+
+    const error = await api.bootstrap().catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 200, code: "INTERNAL", message: "Unexpected response from the server" });
+  });
+
+  it("empty body resolves undefined", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(api.lock()).resolves.toBeUndefined();
+
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
+    await expect(api.authStatus()).resolves.toBeUndefined();
+  });
+
   it("network failure → code NETWORK", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 

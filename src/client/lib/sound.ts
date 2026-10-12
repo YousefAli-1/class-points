@@ -34,25 +34,48 @@ function audio(): { ctx: AudioContext; out: GainNode } | null {
   return { ctx: context, out: output };
 }
 
-/**
- * Browsers (iPad Safari above all) only let audio start inside a user gesture, so the context is
- * created and resumed on the first tap or key press rather than when the page loads.
- */
-function unlockOnFirstGesture(): void {
-  if (typeof window === "undefined") return;
-  const unlock = () => {
-    const a = audio();
-    if (a && a.ctx.state === "suspended") void a.ctx.resume().catch(() => {});
-    if (a) {
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
-    }
-  };
-  window.addEventListener("pointerdown", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+/** iPad Safari only counts the end of a touch (or a click or key press) as a user activation, not `pointerdown`. */
+const UNLOCK_EVENTS = ["pointerup", "touchend", "click", "keydown"] as const;
+
+/** Playing a one-sample silent buffer inside a gesture is what finally wakes audio on iOS. */
+function playSilence(ctx: AudioContext): void {
+  const source = ctx.createBufferSource();
+  source.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  source.connect(ctx.destination);
+  source.start(0);
 }
 
-unlockOnFirstGesture();
+/**
+ * Browsers (iPad Safari above all) only let audio start inside a user gesture, so the context is
+ * created and resumed on a tap or key press rather than when the page loads. Every gesture tries
+ * again until the context is actually running.
+ */
+function unlockOnGesture(): void {
+  if (typeof window === "undefined") return;
+  const stop = () => {
+    for (const type of UNLOCK_EVENTS) window.removeEventListener(type, unlock, true);
+  };
+  const stopIfRunning = (ctx: AudioContext) => {
+    if (ctx.state === "running") stop();
+  };
+  function unlock() {
+    const a = audio();
+    if (!a) return;
+    try {
+      playSilence(a.ctx);
+    } catch {
+      // Not fatal: resume() alone is enough in most browsers.
+    }
+    a.ctx.resume().then(
+      () => stopIfRunning(a.ctx),
+      () => {},
+    );
+    stopIfRunning(a.ctx);
+  }
+  for (const type of UNLOCK_EVENTS) window.addEventListener(type, unlock, true);
+}
+
+unlockOnGesture();
 
 interface Note {
   type: OscillatorType;

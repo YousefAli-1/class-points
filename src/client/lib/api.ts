@@ -53,6 +53,7 @@ const CODE_BY_STATUS: Record<number, ErrorCode> = {
 
 const NETWORK_MESSAGE = "Can't reach Class Points right now. Check the internet connection.";
 const FALLBACK_MESSAGE = "Something went wrong. Please try again.";
+const UNEXPECTED_MESSAGE = "Unexpected response from the server";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -96,8 +97,14 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
     );
   }
 
+  // A 2xx that isn't JSON (say, a proxy's HTML page) is a failure too. An empty body means "nothing".
   const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(res.status, "INTERNAL", UNEXPECTED_MESSAGE);
+  }
 }
 
 const get = <T>(path: string) => request<T>("GET", path);

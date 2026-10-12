@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cx } from "../lib/cx.ts";
 import { BackspaceIcon } from "./icons.tsx";
 
@@ -19,16 +19,45 @@ export interface PinPadProps {
 
 /*
  * Mirroring safety (spec §5): the screen may be shared with the class, so the pad shows filled dots
- * only, never digits, and its keys have no pressed highlight, animation or sound.
+ * only, never digits, and its keys have no pressed, hover or focus highlight, animation or sound.
+ * Keyboard users see the focus ring around the whole pad instead of on one key.
  */
 const KEY_CLASS = cx(
   "chunky-still flex aspect-square w-full select-none items-center justify-center rounded-full",
-  "font-display text-[1.875rem] font-semibold leading-none",
+  "font-display text-[1.875rem] font-semibold leading-none focus-visible:outline-none",
   "disabled:cursor-not-allowed disabled:opacity-40",
 );
 
+const PAD_CLASS = cx(
+  "grid w-full max-w-[16rem] grid-cols-3 gap-4 rounded-[2rem]",
+  "has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-8 has-[:focus-visible]:outline-forest",
+);
+
+/** Typing in these keeps its usual meaning: the pad only listens when nothing else wants the key. */
+const OTHER_CONTROLS = [
+  "input",
+  "textarea",
+  "select",
+  "[contenteditable]:not([contenteditable=false])",
+  "button",
+  "a[href]",
+  "summary",
+  "[role=button]",
+  "[role=link]",
+  "[role=menuitem]",
+  "[role=option]",
+  "[role=tab]",
+  "[role=checkbox]",
+  "[role=radio]",
+  "[role=switch]",
+  "[role=slider]",
+  "[role=textbox]",
+  "[role=combobox]",
+].join(",");
+
 export function PinPad({ value, onChange, onSubmit, disabled = false, wrong = false, shakeKey = 0 }: PinPadProps) {
   const canSubmit = !disabled && value.length >= MIN_DIGITS;
+  const padRef = useRef<HTMLDivElement>(null);
 
   function addDigit(d: string) {
     if (disabled || value.length >= MAX_DIGITS) return;
@@ -45,10 +74,14 @@ export function PinPad({ value, onChange, onSubmit, disabled = false, wrong = fa
     if (canSubmit) onSubmit(value);
   }
 
-  // A laptop keyboard works too. Nothing on screen reacts to which key was pressed.
+  // A laptop keyboard works too, while focus is on the page itself or inside the pad. Nothing on
+  // screen reacts to which key was pressed.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const target = e.target;
+      const inPad = target instanceof Node && padRef.current?.contains(target);
+      if (!inPad && target instanceof Element && target.closest(OTHER_CONTROLS)) return;
       if (/^\d$/.test(e.key)) addDigit(e.key);
       else if (e.key === "Backspace") removeDigit();
       else if (e.key === "Enter") submit();
@@ -60,7 +93,7 @@ export function PinPad({ value, onChange, onSubmit, disabled = false, wrong = fa
   });
 
   return (
-    <div className="flex w-full flex-col items-center gap-6">
+    <div ref={padRef} className="flex w-full flex-col items-center gap-6">
       <div
         key={shakeKey}
         data-testid="pin-dots"
@@ -92,7 +125,7 @@ export function PinPad({ value, onChange, onSubmit, disabled = false, wrong = fa
         {value.length === 0 ? "No digits entered" : `${value.length} digits entered`}
       </p>
 
-      <div className="grid w-full max-w-[16rem] grid-cols-3 gap-4">
+      <div role="group" aria-label="PIN keys" className={PAD_CLASS}>
         {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
           <button
             key={d}
