@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -117,6 +117,29 @@ describe("AdminPage", () => {
 });
 
 describe("PointsTab", () => {
+  it("previews the tiles as the class sees them: red cards and the day view's points sticker", () => {
+    renderWith(<PointsTab />, (qc) => qc.setQueryData(qk.bootstrap, BOOT));
+    const preview = (kind: string) => {
+      const el = document.querySelector<HTMLElement>(`[data-preview="${kind}"]`);
+      if (!el) throw new Error(`No ${kind} preview`);
+      return el;
+    };
+    const redCards = (kind: string) => preview(kind).querySelectorAll(".bg-card-red").length;
+    const sticker = (kind: string, text: string) => within(preview(kind)).getByText(text).closest("span.rounded-full");
+
+    // Spec §2 decision 1: Warning and Penalty are both red cards.
+    expect([redCards("clean"), redCards("warning"), redCards("penalty")]).toEqual([0, 1, 2]);
+    // The only yellow on the Warning preview is its 0 sticker: no yellow card.
+    expect(preview("warning").querySelectorAll("[class*='bg-sunshine']")).toHaveLength(1);
+    // Spec §8.4: +1 green with a star, 0 yellow, −1 coral.
+    expect(sticker("clean", "+1")?.className).toContain("bg-leaf");
+    expect(within(preview("clean")).getByText("⭐")).toBeTruthy();
+    expect(sticker("warning", "0")?.className).toContain("bg-sunshine");
+    expect(sticker("penalty", "−1")?.className).toContain("bg-coral");
+    // The card buttons are only a picture here: nothing to tap or announce.
+    expect(screen.queryByRole("button", { name: /^(Warning|Penalty) for/ })).toBeNull();
+  });
+
   it("points tab blocks invalid ordering", async () => {
     fetchMock.mockImplementation(async (url, init) => {
       if (init?.method === "PATCH") return json({ ...BOOT.settings, ...JSON.parse(String(init.body)) });

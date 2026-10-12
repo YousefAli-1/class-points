@@ -9,8 +9,9 @@ import { Card } from "../../components/ui/Card.tsx";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.tsx";
 import { Stepper } from "../../components/ui/Stepper.tsx";
 import { api } from "../../lib/api.ts";
-import { cx } from "../../lib/cx.ts";
 import { useBootstrap } from "../../lib/queries.ts";
+import { CardButton, type CardState } from "../day/CardButton.tsx";
+import { PointsBadge } from "../day/PointsBadge.tsx";
 import { refreshLessonData, useAdminMutation, useSaveSettings } from "./mutations.ts";
 import { SaveNote, TabHeader } from "./parts.tsx";
 import { TabLoading } from "./TabLoading.tsx";
@@ -24,52 +25,30 @@ const ROWS: { kind: Kind; key: keyof PointValues; label: string }[] = [
   { kind: "penalty", key: "pointsPenalty", label: "Warning + Penalty" },
 ];
 
-/** A little drawing of what the student tile shows: nothing, a yellow card, or yellow + red. */
-function CardArt({ kind }: { kind: Kind }) {
-  if (kind === "clean") {
-    return (
-      <span className="flex h-16 items-center justify-center text-4xl" aria-hidden="true">
-        🌟
-      </span>
-    );
-  }
-  return (
-    <span className="relative flex h-16 w-20 items-center justify-center" aria-hidden="true">
-      <span
-        className={cx(
-          "absolute h-14 w-10 rounded-lg border-2 border-sunshine-deep bg-sunshine shadow-[0_3px_0_0_var(--color-sunshine-deep)]",
-          kind === "penalty" ? "-translate-x-3 -rotate-8" : "-rotate-6",
-        )}
-      />
-      {kind === "penalty" && (
-        <span className="absolute h-14 w-10 translate-x-3 rotate-8 rounded-lg border-2 border-card-red-deep bg-card-red shadow-[0_3px_0_0_var(--color-card-red-deep)]" />
-      )}
-    </span>
-  );
-}
+/** The Warning and Penalty card states a tile shows for each result. */
+const CARDS: Record<Kind, [warning: CardState, penalty: CardState]> = {
+  clean: ["off", "locked"],
+  warning: ["on", "off"],
+  penalty: ["on", "on"],
+};
 
-/** Points as the class sees them: green when positive, grey at zero, coral when negative. */
-function PointsBadge({ value }: { value: number }) {
-  return (
-    <span
-      className={cx(
-        "inline-flex min-w-20 items-center justify-center rounded-full px-4 py-1 font-display text-[2rem] font-bold leading-tight tabular-nums",
-        value > 0 && "bg-sprout-soft text-leaf-deep",
-        value === 0 && "bg-mist text-muted",
-        value < 0 && "bg-[#FFE3DF] text-[#A93424]",
-      )}
-    >
-      {formatPoints(value)}
-    </span>
-  );
-}
+const ignore = () => {};
 
+/** What a student tile shows for each result, drawn with the day view's own cards and points sticker. */
 function PreviewTile({ kind, label, value }: { kind: Kind; label: string; value: number }) {
+  const [warning, penalty] = CARDS[kind];
   return (
-    <div className="flex flex-col items-center gap-2 rounded-card border-2 border-line bg-white px-3 pb-4 pt-3 shadow-[0_4px_0_0_var(--color-line-deep)]">
-      <CardArt kind={kind} />
+    <div
+      data-preview={kind}
+      className="flex flex-col items-center gap-2 rounded-card border-2 border-line bg-white px-3 pb-4 pt-3 shadow-[0_4px_0_0_var(--color-line-deep)]"
+    >
+      {/* Only a picture: these card buttons can't be tapped, focused or heard. */}
+      <div inert aria-hidden="true" className="grid h-24 w-full max-w-40 grid-cols-2 gap-1">
+        <CardButton kind="warning" state={warning} studentName={label} onPress={ignore} />
+        <CardButton kind="penalty" state={penalty} studentName={label} onPress={ignore} />
+      </div>
       <span className="text-center font-display text-lg font-semibold text-forest">{label}</span>
-      <PointsBadge value={value} />
+      <PointsBadge points={value} />
     </div>
   );
 }

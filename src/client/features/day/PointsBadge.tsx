@@ -15,7 +15,7 @@ function tone(points: number | null): string {
   if (points === null) return "bg-mist text-muted ring-line-deep";
   if (points > 0) return "bg-leaf text-white ring-leaf-deep [text-shadow:0_1px_0_rgb(11_58_30/0.35)]";
   if (points === 0) return "bg-sunshine text-ink ring-sunshine-deep";
-  return "bg-coral text-white ring-[#D9503F] [text-shadow:0_1px_1px_rgb(120_30_20/0.45)]";
+  return "bg-coral text-white ring-coral-deep [text-shadow:0_1px_1px_rgb(120_30_20/0.45)]";
 }
 
 /** The round points sticker on a tile: +N green with a star, 0 yellow, −N coral, "–" grey when absent. */
