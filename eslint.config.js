@@ -12,6 +12,8 @@ export default defineConfig([
     "playwright-report",
     "test-results",
     "worker-configuration.d.ts",
+    // Process notes and reviewers' scratch copies of the tree (gitignored), not project code.
+    ".superpowers",
   ]),
   {
     files: ["**/*.js"],
