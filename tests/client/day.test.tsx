@@ -201,6 +201,20 @@ describe("Day view", () => {
     expect(screen.getByRole("button", { name: "More lesson options" })).toBeTruthy();
   });
 
+  it("cancelling the lesson a day opened on stays on that subject", async () => {
+    // Opened from the calendar: no ?subject, so the day shows its first started lesson, Mathematics.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"ok":true}', { status: 200 })));
+    renderDay({ ...startedDay, lessons: [{ ...startedDay.lessons[0], subjectId: 2 }] });
+    expect(await screen.findByRole("button", { name: "Warning for Ali" })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "More lesson options" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Cancel this lesson/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, cancel it" }));
+
+    expect(await screen.findByRole("button", { name: /Start Mathematics lesson/ })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Subject" }).textContent).toContain("Mathematics");
+  });
+
   it("redirects future dates home", async () => {
     renderDay(startedDay, "/day/2026-10-13");
     expect(await screen.findByText("calendar home")).toBeTruthy();

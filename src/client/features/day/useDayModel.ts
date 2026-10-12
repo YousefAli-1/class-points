@@ -151,8 +151,11 @@ export function useDayModel(date: ISODate): DayModel {
   }, [start, subjectId]);
 
   const cancelLesson = useCallback(async () => {
-    if (lesson) await cancel.mutateAsync(lesson.id);
-  }, [cancel, lesson]);
+    if (!lesson) return;
+    // Without ?subject the view follows the day's first started lesson, which is about to go: stay here.
+    setSubjectId(lesson.subjectId);
+    await cancel.mutateAsync(lesson.id);
+  }, [cancel, lesson, setSubjectId]);
 
   const settings = boot?.settings;
   const holidays = useMemo(() => boot?.holidays ?? [], [boot]);
