@@ -43,6 +43,8 @@ The seed **replaces** everything in the local database with 24 students, 3 subje
 
 The vitest-pool-workers deprecation banner printed by `npm run test:worker` is known noise.
 
+`npm run e2e` never touches your dev server or its database. It builds the app, then `e2e/serve.ts` serves the production build with Wrangler twice: on port 8788 for the iPad project and 8789 for desktop. Each server gets a new, empty D1 under `.wrangler/e2e/<project>` and the setup code `e2e-code`, and the first test of each project runs the setup wizard. Run `npx playwright install chromium webkit` once first. Set `E2E_SKIP_BUILD=1` to reuse the last build when only the tests changed.
+
 ## Project layout
 
 ```
