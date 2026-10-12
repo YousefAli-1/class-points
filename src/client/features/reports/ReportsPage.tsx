@@ -3,15 +3,16 @@ import { useLocation, useNavigate } from "react-router";
 import { periodLabel, periodRange } from "@shared/dates.ts";
 import { buildClassReport } from "@shared/report.ts";
 import type { Bootstrap, Student } from "@shared/types.ts";
-import { PinGate } from "../../components/PinGate.tsx";
-import { Button, Card, EmptyState } from "../../components/ui/index.ts";
+import { Card, EmptyState } from "../../components/ui/index.ts";
 import { cx } from "../../lib/cx.ts";
-import { useAuthStatus, useBootstrap, useToday } from "../../lib/queries.ts";
+import { useToday } from "../../lib/queries.ts";
 import { PeriodBar } from "./PeriodBar.tsx";
 import { Podium } from "./Podium.tsx";
 import { PointsChart } from "./PointsChart.tsx";
+import { PrintButton } from "./PrintButton.tsx";
 import { PrintHeader } from "./PrintHeader.tsx";
-import { sortSubjects } from "./reportUtils.ts";
+import { ReportsGate } from "./ReportsGate.tsx";
+import { periodSubjects } from "./reportUtils.ts";
 import { ReportLoadError, ReportLoading } from "./ReportStatus.tsx";
 import { ReportTable } from "./ReportTable.tsx";
 import { SummaryCards } from "./SummaryCards.tsx";
@@ -21,20 +22,7 @@ import "./print.css";
 
 /** The class report (spec §8.5): period and subject filter, summary, podium, chart and table. */
 export default function ReportsPage() {
-  const auth = useAuthStatus();
-  const boot = useBootstrap();
-
-  if (!auth.data || !boot.data) {
-    return boot.isError ? <ReportLoadError onRetry={() => void boot.refetch()} /> : <ReportLoading />;
-  }
-  if (boot.data.settings.reportsNeedPin && !auth.data.adminUnlocked) {
-    return (
-      <section className="flex flex-col gap-4 pt-4">
-        <PinGate title="Reports are locked" subtitle="Enter your PIN to see the reports" />
-      </section>
-    );
-  }
-  return <ClassReportView boot={boot.data} />;
+  return <ReportsGate>{(boot) => <ClassReportView boot={boot} />}</ReportsGate>;
 }
 
 function ClassReportView({ boot }: { boot: Bootstrap }) {
@@ -55,9 +43,7 @@ function ClassReportView({ boot }: { boot: Bootstrap }) {
     [raw.data, students, subjectIds],
   );
 
-  // Filter chips: current subjects, plus removed ones that still have lessons in this period.
-  const taught = new Set(raw.data?.lessons.map((l) => l.subjectId));
-  const chipSubjects = sortSubjects(subjects.filter((s) => s.archivedAt === null || taught.has(s.id)));
+  const { taught, chipSubjects } = periodSubjects(subjects, raw.data?.lessons);
   // Table columns: the subjects in the filter that had a lesson in this period.
   const columns = chipSubjects.filter((s) => taught.has(s.id) && (!subjectIds || subjectIds.includes(s.id)));
 
@@ -70,9 +56,7 @@ function ClassReportView({ boot }: { boot: Bootstrap }) {
 
       <div data-print-hide className="flex items-center gap-3">
         <h1 className="text-4xl">Reports</h1>
-        <Button variant="secondary" icon={<span aria-hidden="true">🖨️</span>} className="ml-auto" onClick={() => window.print()}>
-          Print
-        </Button>
+        <PrintButton />
       </div>
 
       <PeriodBar params={params} range={range} schoolDays={settings.schoolDays} today={today} subjects={chipSubjects} />

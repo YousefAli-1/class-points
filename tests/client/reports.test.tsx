@@ -8,6 +8,7 @@ import { formatPoints } from "@shared/rules.ts";
 import type { AuthStatus, Bootstrap, ReportRaw } from "@shared/types.ts";
 import ReportsPage from "@client/features/reports/ReportsPage.tsx";
 import StudentReportPage from "@client/features/reports/StudentReportPage.tsx";
+import { periodSubjects } from "@client/features/reports/reportUtils.ts";
 import { useReportParams } from "@client/features/reports/useReportParams.ts";
 import { qk } from "@client/lib/queryKeys.ts";
 
@@ -233,5 +234,29 @@ describe("StudentReportPage", () => {
       .map((li) => li.textContent);
     expect(items).toEqual(["Sun 11 Oct · English · 🟥 Warning", "Mon 12 Oct · Mathematics · 🟥🟥 Penalty"]);
     expect(screen.getByRole("heading", { name: "Ada" })).toBeTruthy();
+  });
+
+  it("is locked by the same PIN rule as the class report", () => {
+    renderAt("/reports/student/1?date=2026-10-11", { boot: bootstrap({ reportsNeedPin: true }), raw: null });
+
+    expect(screen.getByRole("heading", { name: "Reports are locked" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Ada" })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("periodSubjects", () => {
+  it("offers current subjects plus removed ones still taught in the period, in admin order", () => {
+    const subjects = [
+      ...bootstrap().subjects,
+      { id: 3, name: "Art", emoji: "🎨", color: "grape" as const, sortOrder: -1, archivedAt: 1_790_000_000_000 },
+      { id: 4, name: "Music", emoji: "🎵", color: "coral" as const, sortOrder: 5, archivedAt: 1_790_000_000_000 },
+    ];
+
+    const { taught, chipSubjects } = periodSubjects(subjects, [{ subjectId: 3 }, { subjectId: 1 }]);
+
+    expect([...taught].sort()).toEqual([1, 3]);
+    expect(chipSubjects.map((s) => s.name)).toEqual(["Art", "English", "Mathematics"]);
+    expect(periodSubjects(subjects, undefined).chipSubjects.map((s) => s.name)).toEqual(["English", "Mathematics"]);
   });
 });

@@ -5,14 +5,15 @@ import { COLORS } from "@shared/palette.ts";
 import { buildStudentReport, type Tally } from "@shared/report.ts";
 import type { Bootstrap, Student, Subject } from "@shared/types.ts";
 import { ArrowLeftIcon } from "../../components/icons.tsx";
-import { PinGate } from "../../components/PinGate.tsx";
-import { Avatar, Button, Card, EmptyState } from "../../components/ui/index.ts";
+import { Avatar, Card, EmptyState } from "../../components/ui/index.ts";
 import { cx } from "../../lib/cx.ts";
-import { useAuthStatus, useBootstrap, useToday } from "../../lib/queries.ts";
+import { useToday } from "../../lib/queries.ts";
 import { PeriodBar } from "./PeriodBar.tsx";
+import { PrintButton } from "./PrintButton.tsx";
 import { PrintHeader } from "./PrintHeader.tsx";
+import { ReportsGate } from "./ReportsGate.tsx";
 import { PointsPill } from "./ReportTable.tsx";
-import { entryParts, sortSubjects } from "./reportUtils.ts";
+import { entryParts, periodSubjects, sortSubjects } from "./reportUtils.ts";
 import { ReportLoadError, ReportLoading } from "./ReportStatus.tsx";
 import { StudentDayChart } from "./StudentDayChart.tsx";
 import { useReportData } from "./useReportData.ts";
@@ -21,38 +22,32 @@ import "./print.css";
 
 /** One student's report (spec §8.5): total, a card per subject, points per day and the days with cards. */
 export default function StudentReportPage() {
-  const auth = useAuthStatus();
-  const boot = useBootstrap();
   const id = Number(useParams().id);
   const { search } = useLocation();
 
-  if (!auth.data || !boot.data) {
-    return boot.isError ? <ReportLoadError onRetry={() => void boot.refetch()} /> : <ReportLoading />;
-  }
-  if (boot.data.settings.reportsNeedPin && !auth.data.adminUnlocked) {
-    return (
-      <section className="flex flex-col gap-4 pt-4">
-        <PinGate title="Reports are locked" subtitle="Enter your PIN to see the reports" />
-      </section>
-    );
-  }
-  const student = boot.data.students.find((s) => s.id === id);
-  if (!student) {
-    return (
-      <Card className="mt-4">
-        <EmptyState
-          mood="think"
-          title="We couldn’t find that student"
-          action={
-            <Link to={`/reports${search}`} className="font-display text-xl font-bold text-leaf-deep underline">
-              Back to the class report
-            </Link>
-          }
-        />
-      </Card>
-    );
-  }
-  return <StudentReportView boot={boot.data} student={student} />;
+  return (
+    <ReportsGate>
+      {(boot) => {
+        const student = boot.students.find((s) => s.id === id);
+        if (!student) {
+          return (
+            <Card className="mt-4">
+              <EmptyState
+                mood="think"
+                title="We couldn’t find that student"
+                action={
+                  <Link to={`/reports${search}`} className="font-display text-xl font-bold text-leaf-deep underline">
+                    Back to the class report
+                  </Link>
+                }
+              />
+            </Card>
+          );
+        }
+        return <StudentReportView boot={boot} student={student} />;
+      }}
+    </ReportsGate>
+  );
 }
 
 function StudentReportView({ boot, student }: { boot: Bootstrap; student: Student }) {
@@ -72,8 +67,7 @@ function StudentReportView({ boot, student }: { boot: Bootstrap; student: Studen
   );
 
   const subjectById = new Map(subjects.map((s) => [s.id, s]));
-  const taught = new Set(raw.data?.lessons.map((l) => l.subjectId));
-  const chipSubjects = sortSubjects(subjects.filter((s) => s.archivedAt === null || taught.has(s.id)));
+  const { chipSubjects } = periodSubjects(subjects, raw.data?.lessons);
   const row = report?.row ?? null;
   const studentSubjects = row ? sortSubjects(subjects.filter((s) => row.bySubject[s.id])) : [];
   const notable = report?.entries.filter((e) => e.status !== "clean") ?? [];
@@ -90,9 +84,7 @@ function StudentReportView({ boot, student }: { boot: Bootstrap; student: Studen
           <ArrowLeftIcon size={24} />
           Class report
         </Link>
-        <Button variant="secondary" icon={<span aria-hidden="true">🖨️</span>} className="ml-auto" onClick={() => window.print()}>
-          Print
-        </Button>
+        <PrintButton />
       </div>
 
       <PeriodBar params={params} range={range} schoolDays={settings.schoolDays} today={today} subjects={chipSubjects} />
