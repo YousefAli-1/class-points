@@ -1,0 +1,97 @@
+/*
+ * Printing the reports (spec §8.5): A4 landscape for the class report, portrait for a student's
+ * report, both with 12 mm margins. Each page's root carries `data-print="class|student"`.
+ * The global styles already print on white and hide `[data-print-hide]`.
+ */
+@page class-report {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+@page student-report {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
+  [data-print="class"] {
+    page: class-report;
+  }
+
+  [data-print="student"] {
+    page: student-report;
+  }
+
+  /*
+   * The shell around the report (toaster, portals) would otherwise sit on the default page, and a
+   * change of named page forces a break: a blank last sheet. Put the whole document on the report's page.
+   */
+  body:has([data-print="class"]) {
+    page: class-report;
+  }
+  body:has([data-print="student"]) {
+    page: student-report;
+  }
+
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Keep the subject colours, podium and points pills (Safari and Chrome drop backgrounds otherwise). */
+  [data-print],
+  [data-print] * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Flat cards on paper: a hairline instead of a soft shadow. */
+  [data-print] [data-print-flat] {
+    box-shadow: none !important;
+    outline: 1px solid #cbe7d5;
+  }
+
+  /* Charts are drawn at screen width; scale them (the SVG has a viewBox) to the paper width. */
+  [data-print] [data-chart] {
+    height: auto !important;
+  }
+  [data-print] .recharts-wrapper,
+  [data-print] .recharts-surface {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  /* A long class list still fits on one sheet: the SVG keeps its aspect ratio and shrinks to fit. */
+  [data-print] .recharts-surface {
+    max-height: 150mm;
+  }
+
+  [data-print] tr,
+  [data-print] li,
+  [data-print] [data-print-keep] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  [data-print] h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /*
+   * Plain block flow on paper: a flex column leaves an empty first fragment of a card that is pushed
+   * to the next sheet, and its rounded outline prints as a stray line at the foot of the page.
+   */
+  [data-print],
+  [data-print] [data-print-stack] {
+    display: block !important;
+  }
+  [data-print] > * + *,
+  [data-print] [data-print-stack] > * + * {
+    margin-top: 16px;
+  }
+
+  /* The table scrolls sideways on screen; on paper it must show every column. */
+  [data-print] .overflow-x-auto {
+    overflow: visible !important;
+  }
+}
