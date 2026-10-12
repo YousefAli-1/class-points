@@ -19,6 +19,8 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "seed:local": "node scripts/seed.ts",
+    "restore:backup": "node scripts/restore-backup.ts",
+    "icons": "node scripts/make-icons.ts",
     "cf-typegen": "wrangler types",
     "deploy": "npm run build && wrangler deploy"
   },

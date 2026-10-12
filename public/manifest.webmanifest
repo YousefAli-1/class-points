@@ -1,0 +1,16 @@
+{
+  "name": "Class Points",
+  "short_name": "Points",
+  "description": "Behaviour points for the class, saved as you tap.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EEF9F1",
+  "theme_color": "#14532D",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
