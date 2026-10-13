@@ -46,7 +46,11 @@ export function PeriodBar({ params, range, schoolDays, today, subjects }: Period
           onChange={(p) => set({ period: p })}
           options={PERIOD_OPTIONS}
         />
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        {/*
+          On a phone the navigator takes its own line (next to Day | Week | Month it ran off the screen),
+          and "This week" drops below the ‹ label › when they don't all fit.
+        */}
+        <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-x-2 gap-y-2 sm:basis-auto">
           <IconButton
             label={PREV_LABEL[period]}
             icon={<ChevronLeftIcon size={28} />}
@@ -54,7 +58,7 @@ export function PeriodBar({ params, range, schoolDays, today, subjects }: Period
           />
           <p
             aria-live="polite"
-            className="min-w-0 flex-1 text-center font-display text-2xl font-semibold text-forest tabular-nums sm:min-w-56 sm:flex-none"
+            className="flex-auto whitespace-nowrap text-center font-display text-xl font-semibold text-forest tabular-nums sm:min-w-56 sm:flex-none sm:text-2xl"
           >
             {periodLabel(period, range)}
           </p>

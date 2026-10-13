@@ -126,3 +126,24 @@ test("new point values: past lessons keep theirs until she updates them all, the
     await api.recalculate();
   }
 });
+
+test("on a phone the report controls fit the screen, with no sideways scroll", async ({ page, api }) => {
+  // She reads reports on her phone too (spec §1); 390×844 is a common iPhone size.
+  const width = 390;
+  await page.setViewportSize({ width, height: 844 });
+  const lina = (await api.studentIds()).get("Lina");
+  for (const path of ["/reports?period=week", `/reports/student/${lina}?period=month`]) {
+    await page.goto(path);
+    // A past period, so the "This week" / "This month" button shows as well.
+    await page.getByRole("button", { name: /^Previous (week|month)$/ }).click();
+    await expect(page.getByRole("button", { name: /^This (week|month)$/ })).toBeVisible();
+
+    for (const name of [/^Previous (week|month)$/, /^Next (week|month)$/, /^This (week|month)$/]) {
+      const box = await page.getByRole("button", { name }).boundingBox();
+      if (!box) throw new Error(`No ${name} button`);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+  }
+});
