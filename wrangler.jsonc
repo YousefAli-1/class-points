@@ -17,6 +17,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  "workers_dev": true,
+  "preview_urls": false,
   "observability": {
     "enabled": true
   }
