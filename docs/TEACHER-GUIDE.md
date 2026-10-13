@@ -55,6 +55,9 @@ Tap **🔒 Admin** to change students, subjects, points, school days, holidays, 
 
 Forgot your password or PIN? Tap **Forgot password?** on the login page and use your **setup code** (the code on the paper you were given).
 
+- **Do a reset while the iPad is not on the board.** The setup code can change your password and PIN, so the class must never see it. Stop mirroring first, or use your laptop or phone.
+- If you think someone saw the code, call Yousef (below) for a new one.
+
 ## Backups
 
 Your data is stored safely online, and the last 7 days can always be rolled back if something goes wrong.

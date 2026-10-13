@@ -10,6 +10,7 @@ import { ApiError, api } from "../../lib/api.ts";
 import { useAuthStatus } from "../../lib/queries.ts";
 import { friendlyErrorMessage } from "../../lib/queryClient.ts";
 import { AuthLayout } from "./AuthLayout.tsx";
+import { SetupCodeField } from "./SetupCodeField.tsx";
 import { PIN_INPUT, onlyProblems, problemWith } from "./validate.ts";
 
 type FieldName = "setupCode" | "password" | "password2" | "pin" | "pin2";
@@ -84,7 +85,7 @@ export function ResetPage() {
       }
     >
       <form onSubmit={(e) => void reset(e)} className="flex flex-col gap-4" noValidate>
-        <TextField label="Setup code" autoComplete="off" autoCapitalize="off" spellCheck={false} {...field("setupCode")} />
+        <SetupCodeField {...field("setupCode")} />
         <input type="text" name="username" autoComplete="username" value="teacher" readOnly hidden />
         <TextField label="New password" type="password" autoComplete="new-password" hint="At least 8 characters." {...field("password")} />
         <TextField label="New password again" type="password" autoComplete="new-password" {...field("password2")} />

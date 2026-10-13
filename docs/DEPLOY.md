@@ -46,6 +46,8 @@ npx wrangler secret put SETUP_CODE
 
 If the Worker doesn't exist yet, Wrangler offers to create it: answer yes. Give the code to the teacher on paper and keep a copy somewhere safe. Without it she can't reset her password.
 
+**If the code may have leaked** (for example it was shown on the classroom board, or the paper went missing), replace it straight away: run `npx wrangler secret put SETUP_CODE` again with a new random code. The old code stops working at once; nothing needs redeploying. Give her the new code on paper, then have her set a new password and PIN with it through **Forgot password?**, on a screen the class can't see. That also logs out every device, in case someone already used the old code.
+
 ## 5. Add the GitHub secrets
 
 In the repo: **Settings → Secrets and variables → Actions → New repository secret**:

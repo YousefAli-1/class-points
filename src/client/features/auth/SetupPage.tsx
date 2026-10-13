@@ -17,6 +17,7 @@ import { useAuthStatus, useToday } from "../../lib/queries.ts";
 import { friendlyErrorMessage } from "../../lib/queryClient.ts";
 import { useSound } from "../../lib/sound.ts";
 import { AuthLayout } from "./AuthLayout.tsx";
+import { SetupCodeField } from "./SetupCodeField.tsx";
 import { PIN_INPUT, onlyProblems, problemWith } from "./validate.ts";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -223,12 +224,8 @@ export function SetupPage() {
         {step === 0 && (
           <>
             <p className="-mt-2 mb-1 text-center text-lg text-muted">First, the setup code and a few names.</p>
-            <TextField
-              label="Setup code"
+            <SetupCodeField
               hint="You got it from the person who installed Class Points."
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
               autoFocus
               {...field("setupCode")}
             />
