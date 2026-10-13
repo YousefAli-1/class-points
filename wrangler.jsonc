@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "class-points",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "d77f6575-f0e1-4f4e-96f9-42f36b116260",
       "migrations_dir": "migrations"
     }
   ],
