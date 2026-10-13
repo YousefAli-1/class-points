@@ -61,4 +61,4 @@ e2e/           Playwright tests
 ## CI/CD
 
 - `.github/workflows/ci.yml` runs on every push and pull request: lint, typecheck, all tests and the build.
-- `.github/workflows/deploy.yml` runs on pushes to `main` (or by hand): the same checks, then `wrangler d1 migrations apply DB --remote` and `wrangler deploy`. It needs the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).
+- `.github/workflows/deploy.yml` runs on pushes to `main` (or by hand): the same checks in a job with no secrets, then, on `main` only, a `deploy` job that runs `wrangler d1 migrations apply DB --remote` and `wrangler deploy`. Only those two steps get `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, from the GitHub environment `production` (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).

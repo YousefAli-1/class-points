@@ -48,18 +48,29 @@ If the Worker doesn't exist yet, Wrangler offers to create it: answer yes. Give 
 
 **If the code may have leaked** (for example it was shown on the classroom board, or the paper went missing), replace it straight away: run `npx wrangler secret put SETUP_CODE` again with a new random code. The old code stops working at once; nothing needs redeploying. Give her the new code on paper, then have her set a new password and PIN with it through **Forgot password?**, on a screen the class can't see. That also logs out every device, in case someone already used the old code.
 
-## 5. Add the GitHub secrets
+## 5. Add the GitHub secrets to a `production` environment
 
-In the repo: **Settings → Secrets and variables → Actions → New repository secret**:
+The token can deploy to her account and read or delete the class data, so it lives in a GitHub **environment** that only `main` can use, not in the repository secrets.
 
-| Name | Value |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | the token from step 2 |
-| `CLOUDFLARE_ACCOUNT_ID` | her account id |
+1. In the repo: **Settings → Environments → New environment**, name it `production`.
+2. Under **Deployment branches and tags**, choose **Selected branches and tags** and add the rule `main`.
+3. Under **Environment secrets**, add:
+
+   | Name | Value |
+   |---|---|
+   | `CLOUDFLARE_API_TOKEN` | the token from step 2 |
+   | `CLOUDFLARE_ACCOUNT_ID` | her account id |
+
+Don't also add them as repository secrets. Also protect `main`: **Settings → Branches → Add branch ruleset** (or classic rule) for `main`, requiring a pull request and the **CI** check to pass, since every push to `main` deploys.
 
 ## 6. Push to `main`
 
-The **Deploy** workflow lints, typechecks, runs every test, builds, applies the D1 migrations (`wrangler d1 migrations apply DB --remote`) and deploys (`wrangler deploy`). Watch it in the **Actions** tab. You can also start it by hand there (**Run workflow**).
+The **Deploy** workflow has two jobs:
+
+- **check** lints, typechecks, runs every test and builds. It has no Cloudflare secrets, so nothing that `npm ci` installs can read them.
+- **deploy** runs only on `main` and only after **check** passes. It builds again, then applies the D1 migrations (`wrangler d1 migrations apply DB --remote`) and deploys (`wrangler deploy`). Only those two commands get the secrets.
+
+Watch it in the **Actions** tab. You can also start it by hand there (**Run workflow**); a run started on any branch other than `main` only does the checks.
 
 ## 7. Run setup and hand over
 
