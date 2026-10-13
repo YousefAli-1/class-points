@@ -14,14 +14,17 @@ function PageLoading() {
   );
 }
 
-/** Every signed-in screen: the leaf background, the top bar and the page. */
+/**
+ * Every signed-in screen: the leaf background, the top bar and the page. A page marked
+ * `data-fit-screen` (the day view) gets a column exactly one screen tall to fill (see index.css).
+ */
 export function AppShell() {
   return (
-    <div className="relative flex min-h-dvh flex-col">
+    <div className="relative flex min-h-dvh flex-col fit-screen:h-svh fit-screen:min-h-svh">
       <LeafBackdrop />
       <TopBar />
-      <main className="relative z-10 flex-1 px-safe pb-safe pt-3 sm:pt-4">
-        <div className="mx-auto w-full max-w-[90rem]">
+      <main className="relative z-10 flex-1 px-safe pb-safe pt-3 sm:pt-4 fit-screen:flex fit-screen:flex-col fit-screen:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-[90rem] fit-screen:flex fit-screen:flex-1 fit-screen:flex-col">
           <Suspense fallback={<PageLoading />}>
             <Outlet />
           </Suspense>

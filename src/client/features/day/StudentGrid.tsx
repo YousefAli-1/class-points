@@ -15,12 +15,21 @@ export interface StudentGridProps {
 }
 
 /*
- * Tile height: on iPad landscape four rows must fit under the top bar, the day header and the footer
- * (Global Constraints: 24 students at 1180×820 without scrolling). 17.5rem is everything on the page
- * that isn't a tile row: top bar 84px, page padding 32px, header 64px, footer 56px, gaps 40px, plus a
- * few px of slack. Taller screens get taller tiles; shorter ones keep a readable minimum and scroll.
+ * Tile height. On a phone the page scrolls and tiles keep a fixed height. From iPad width up the day
+ * view fills exactly one screen (`fit-screen`, see index.css): the grid takes the height left under
+ * the header and above the footer, and splits it into 4 rows in landscape (24 students on 6 columns)
+ * or 6 in portrait (4 columns). Fewer students keep the same tile size; more add rows that share the
+ * height too.
+ *
+ * Each tile is a size container: below 8.0625rem (its full content) it switches to a smaller avatar
+ * (StudentTile), which lets it go down to 7.375rem with the 56px card buttons still inside. That fits
+ * 24 tiles in iPad Safari with its toolbars (about 1180×744). On a screen too short even for that the
+ * page scrolls, and the footer, which sits below the grid, never covers a tile.
  */
-const TILE_HEIGHT = "h-[8.5rem] lg:h-[max(8.25rem,calc((100dvh-17.5rem)/4))]";
+const GRID_ROWS = [
+  "md:grid-rows-[repeat(6,minmax(7.375rem,1fr))] md:auto-rows-[minmax(7.375rem,1fr)]",
+  "lg:grid-rows-[repeat(4,minmax(7.375rem,1fr))]",
+].join(" ");
 
 /** The class as a grid of tiles: 2 across on a phone, 4 on iPad portrait, 6 on iPad landscape. */
 export function StudentGrid({ students, statusOf, values, onAct, entrance = false }: StudentGridProps) {
@@ -28,7 +37,7 @@ export function StudentGrid({ students, statusOf, values, onAct, entrance = fals
   return (
     <motion.ul
       aria-label="Students"
-      className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6"
+      className={`grid grid-cols-2 gap-2 md:flex-1 md:grid-cols-4 lg:grid-cols-6 ${GRID_ROWS}`}
       variants={GRID_VARIANTS}
       initial={entrance ? "hidden" : false}
       animate="show"
@@ -39,7 +48,7 @@ export function StudentGrid({ students, statusOf, values, onAct, entrance = fals
           layout={!reduce}
           variants={reduce ? TILE_VARIANTS_REDUCED : TILE_VARIANTS}
           transition={SPRING}
-          className={TILE_HEIGHT}
+          className="h-[8.5rem] md:h-auto md:[container-type:size]"
         >
           <StudentTile student={s} status={statusOf(s.id)} values={values} onAct={onAct} />
         </motion.li>

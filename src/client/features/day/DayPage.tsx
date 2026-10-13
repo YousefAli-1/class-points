@@ -104,7 +104,8 @@ function DayView({ date, today }: { date: ISODate; today: ISODate }) {
   }
 
   return (
-    <section className="flex flex-col gap-2">
+    // From iPad width up the day view is exactly one screen tall (fit-screen in index.css).
+    <section data-fit-screen className="flex flex-col gap-2 md:flex-1">
       <DayHeader
         date={date}
         today={today}

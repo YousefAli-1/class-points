@@ -71,24 +71,51 @@ test("a penalty without a warning is blocked with a hint", async ({ page, api })
   await expect(warningCard(page, "Omar")).toHaveAttribute("aria-pressed", "false");
 });
 
-test("all 24 tiles are visible without scrolling", async ({ page, api }) => {
-  await api.startLesson(today(), "English");
-  await openLesson(page, api, today(), "English");
-  await expect(allTiles(page)).toHaveCount(24);
+/** Where each tile's Warning button is, and what a tap at its centre would hit. */
+async function tileLayout(page: Page) {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('[aria-label="Students"] [role="group"]'), (tile) => {
+      const warning = tile.querySelector<HTMLElement>('button[aria-label^="Warning for"]');
+      if (!warning) throw new Error(`No Warning button on ${tile.getAttribute("aria-label")}`);
+      const r = warning.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return {
+        name: tile.getAttribute("aria-label"),
+        bottom: tile.getBoundingClientRect().bottom,
+        // Content taller than the tile would push the card buttons out of it.
+        overflow: tile.scrollHeight - tile.clientHeight,
+        tapHitsWarning: hit !== null && warning.contains(hit),
+      };
+    }),
+  );
+}
 
-  const viewport = page.viewportSize();
-  if (!viewport) throw new Error("No viewport");
-  const footer = await page.locator("footer", { has: page.getByRole("list", { name: "Lesson so far" }) }).boundingBox();
-  if (!footer) throw new Error("No lesson footer");
-  for (const box of await Promise.all((await allTiles(page).all()).map((t) => t.boundingBox()))) {
-    if (!box) throw new Error("A tile isn't rendered");
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-    // The sticky footer must not cover the last row.
-    expect(box.y + box.height).toBeLessThanOrEqual(footer.y);
-  }
-  expect(footer.y + footer.height).toBeLessThanOrEqual(viewport.height);
-  expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
-});
+// 820 is the iPad viewport in its home-screen app (Global Constraints). 744 is the same iPad in Safari
+// with its toolbars, and 670 an iPad mini in Safari: there the page may scroll, but the footer must
+// never cover a tile.
+for (const height of [820, 744, 670]) {
+  test(`all 24 tiles are visible and tappable at a viewport ${height}px tall`, async ({ page, api }) => {
+    const width = page.viewportSize()?.width ?? 1180;
+    await page.setViewportSize({ width, height });
+    await api.startLesson(today(), "English");
+    await openLesson(page, api, today(), "English");
+    await expect(allTiles(page)).toHaveCount(24);
+
+    const footer = await page.locator("footer", { has: page.getByRole("list", { name: "Lesson so far" }) }).boundingBox();
+    if (!footer) throw new Error("No lesson footer");
+    const tiles = await tileLayout(page);
+    for (const t of tiles) {
+      expect(t.bottom, `${t.name} ends above the footer`).toBeLessThanOrEqual(footer.y);
+      expect(t.overflow, `${t.name}'s cards fit inside the tile`).toBeLessThanOrEqual(0);
+    }
+    if (height >= 744) {
+      // Everything on one screen: no scrolling, and a tap on any Warning card reaches it.
+      expect(footer.y + footer.height).toBeLessThanOrEqual(height);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+      expect(tiles.filter((t) => !t.tapHitsWarning).map((t) => t.name)).toEqual([]);
+    }
+  });
+}
 
 test("tapping a past day opens its first started lesson; a future day stays locked", async ({ page, api }) => {
   // Only Mathematics was taught yesterday, so the day opens on it rather than on English (the first

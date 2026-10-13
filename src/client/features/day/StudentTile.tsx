@@ -96,7 +96,13 @@ export function StudentTile({ student, status, values, onAct }: StudentTileProps
         <PointsBadge ref={badgeRef} points={pointsFor(status, values)} />
       </span>
 
-      <div className="relative flex h-[3.25rem] shrink-0 items-center justify-center max-sm:scale-[0.8]">
+      {/* A short tile (see StudentGrid) gets a smaller avatar, so the card buttons keep their 56px. */}
+      <div
+        className={cx(
+          "relative flex h-[3.25rem] shrink-0 items-center justify-center max-sm:scale-[0.8]",
+          "[@container(height<8.0625rem)]:h-10 [@container(height<8.0625rem)]:scale-75",
+        )}
+      >
         <Avatar emoji={student.avatar} color={student.color} size="md" dimmed={absent} />
         {absent && (
           <span aria-hidden="true" className="absolute -right-3 -top-1 text-lg leading-none motion-safe:animate-float-up">

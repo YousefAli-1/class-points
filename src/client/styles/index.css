@@ -136,6 +136,19 @@
     0 12px 18px -10px rgb(18 48 31 / 0.35);
 }
 
+/*
+ * From iPad width up, the day view fills exactly one screen: the page marks itself with
+ * `data-fit-screen`, and the app shell becomes a column 100svh tall (svh, not dvh, which changes
+ * as Safari's toolbars come and go), so the tiles share whatever height is left (Global Constraints).
+ */
+@custom-variant fit-screen {
+  @media (width >= 48rem) {
+    &:has([data-fit-screen]) {
+      @slot;
+    }
+  }
+}
+
 /* Safe-area aware gutters (iPad home indicator, notched phones in landscape). */
 @utility px-safe {
   padding-left: max(1rem, env(safe-area-inset-left));

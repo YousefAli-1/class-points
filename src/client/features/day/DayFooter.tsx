@@ -28,7 +28,9 @@ export function DayFooter({ counts, subjectName, onCancelLesson }: DayFooterProp
   return (
     <footer
       data-print-hide
-      className="sticky bottom-2 z-30 flex min-h-14 items-center gap-2 rounded-blob bg-white/90 pl-4 pr-0.5 shadow-soft ring-1 ring-white backdrop-blur-md"
+      // Sticky on a phone, where the page scrolls. From iPad width up it sits under the grid, which
+      // fills the rest of the screen, so it can never cover a tile.
+      className="sticky bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 flex min-h-14 items-center gap-2 rounded-blob bg-white/90 pl-4 pr-0.5 shadow-soft ring-1 ring-white backdrop-blur-md md:static"
     >
       <ul
         aria-label="Lesson so far"
