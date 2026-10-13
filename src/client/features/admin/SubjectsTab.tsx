@@ -17,6 +17,7 @@ import { inOrder, patchBootstrap, refreshLessonData, useAdminMutation } from "./
 import { Collapsible, LookButton, NameInput, RowCard, TabHeader } from "./parts.tsx";
 import { SortableList } from "./SortableList.tsx";
 import { TabLoading } from "./TabLoading.tsx";
+import { undoToast } from "./undoToast.ts";
 
 const MAX_NAME = 30;
 
@@ -38,10 +39,7 @@ function SubjectRow({ subject, handle, onlyOne }: { subject: Subject; handle: Re
   const update = useSubjectPatch(false);
   const restore = useAdminMutation((id: number) => api.restoreSubject(id));
   const archive = useAdminMutation((id: number) => api.archiveSubject(id), {
-    onSuccess: () =>
-      toast(`${subject.name} moved to Removed subjects`, {
-        action: { label: "Undo", onClick: () => restore.mutate(subject.id) },
-      }),
+    onSuccess: () => undoToast(`${subject.name} moved to Removed subjects`, () => restore.mutate(subject.id)),
   });
   const look = { emoji: subject.emoji, color: subject.color };
 

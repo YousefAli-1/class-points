@@ -20,6 +20,7 @@ import { inOrder, patchBootstrap, refreshLessonData, useAdminMutation } from "./
 import { Collapsible, LookButton, NameInput, RowCard, TabHeader } from "./parts.tsx";
 import { SortableList } from "./SortableList.tsx";
 import { TabLoading } from "./TabLoading.tsx";
+import { undoToast } from "./undoToast.ts";
 
 const MAX_ACTIVE = 60;
 
@@ -48,10 +49,7 @@ function StudentRow({ student, handle, taken }: { student: Student; handle: Reac
   const update = useStudentPatch(false);
   const restore = useAdminMutation((id: number) => api.restoreStudent(id));
   const archive = useAdminMutation((id: number) => api.archiveStudent(id, todayISO()), {
-    onSuccess: () =>
-      toast(`${student.name} moved to Removed students`, {
-        action: { label: "Undo", onClick: () => restore.mutate(student.id) },
-      }),
+    onSuccess: () => undoToast(`${student.name} moved to Removed students`, () => restore.mutate(student.id)),
   });
   const look = { emoji: student.avatar, color: student.color };
 
