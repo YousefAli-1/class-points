@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DayResponse, MarkStatus, Student } from "@shared/types.ts";
+import { CardButton, type CardState } from "@client/features/day/CardButton.tsx";
 import DayPage from "@client/features/day/DayPage.tsx";
 import { withMarks } from "@client/lib/dayCache.ts";
 import { qk } from "@client/lib/queryKeys.ts";
@@ -239,5 +240,26 @@ describe("Day view", () => {
   it("redirects future dates home", async () => {
     renderDay(startedDay, "/day/2026-10-13");
     expect(await screen.findByText("calendar home")).toBeTruthy();
+  });
+});
+
+describe("CardButton", () => {
+  /** The picture inside the empty slot of a Warning button in `state`. */
+  function emptySlotArt(state: CardState) {
+    render(<CardButton kind="warning" state={state} studentName={state} onPress={() => {}} />);
+    const art = screen.getByRole("button", { name: `Warning for ${state}` }).querySelector("svg");
+    if (!art) throw new Error("No picture in the empty slot");
+    return art;
+  }
+
+  it.each<CardState>(["off", "locked"])("draws an empty card in the %s slot, not a page of text", (state) => {
+    const art = emptySlotArt(state);
+    // One card outline, shaped 5:6 like the red card that lands in the slot (aspect-[5/6])…
+    const cards = art.querySelectorAll("rect");
+    expect(cards).toHaveLength(1);
+    const ratio = Number(cards[0].getAttribute("width")) / Number(cards[0].getAttribute("height"));
+    expect(ratio).toBeCloseTo(5 / 6, 3);
+    // …and no lines of "writing" on it, which made it read as a document.
+    expect(art.querySelectorAll("path, line, polyline")).toHaveLength(0);
   });
 });

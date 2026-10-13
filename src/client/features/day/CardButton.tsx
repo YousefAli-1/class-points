@@ -16,12 +16,26 @@ export interface CardButtonProps {
 
 const LABELS = { warning: "Warning", penalty: "Penalty" } as const;
 
-/** A little playing card, drawn in the empty slot. */
-function CardGlyph() {
+/**
+ * A faint card in the empty slot: the 5:6 shape of the red card that lands there, with the same
+ * shine dot, and nothing written on it (lines inside made it read as a page).
+ */
+function EmptyCard() {
   return (
-    <svg viewBox="0 0 24 24" className="size-[45%] max-w-7" aria-hidden="true" focusable="false">
-      <rect x="5" y="3" width="14" height="18" rx="3" fill="none" stroke="currentColor" strokeWidth="2.2" />
-      <path d="M9 8.5h6M9 12h6M9 15.5h3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox="0 0 20 24" className="aspect-[5/6] h-[56%] max-h-11" aria-hidden="true" focusable="false">
+      <rect
+        x="1.25"
+        y="1.5"
+        width="17.5"
+        height="21"
+        rx="4"
+        fill="currentColor"
+        fillOpacity="0.12"
+        stroke="currentColor"
+        strokeOpacity="0.55"
+        strokeWidth="1.75"
+      />
+      <circle cx="5.75" cy="6" r="1.75" fill="currentColor" fillOpacity="0.4" />
     </svg>
   );
 }
@@ -65,7 +79,7 @@ export function CardButton({ kind, state, studentName, disabled = false, onPress
               !disabled && state !== "locked" && "group-hover:border-sprout group-hover:bg-sprout-soft/60",
             )}
           >
-            <CardGlyph />
+            <EmptyCard />
           </span>
 
           <AnimatePresence initial={false}>
