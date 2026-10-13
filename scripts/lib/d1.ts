@@ -1,6 +1,6 @@
 // Shared by the seed and restore scripts: SQL text for D1 and a way to run it through Wrangler.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -38,9 +38,14 @@ export function insertRows(table: string, columns: readonly string[], rows: read
 
 const WRANGLER = join(import.meta.dirname, "..", "..", "node_modules", "wrangler", "bin", "wrangler.js");
 
-/** Writes `statements` to a temp file and runs it with `wrangler d1 execute DB`. Exits on failure. */
+/**
+ * Writes `statements` to a temp file and runs it with `wrangler d1 execute DB`. The file holds class
+ * data (a restore has every child's name and marks), so it is deleted after a successful run. On a
+ * failure it is kept for debugging, its path is printed and the process exits.
+ */
 export function executeOnD1(statements: readonly string[], target: "local" | "remote"): void {
-  const file = join(mkdtempSync(join(tmpdir(), "class-points-")), "script.sql");
+  const dir = mkdtempSync(join(tmpdir(), "class-points-"));
+  const file = join(dir, "script.sql");
   writeFileSync(file, statements.join("\n") + "\n", "utf8");
   console.log(`Running ${statements.length} statements on the ${target} database…`);
   // Wrangler echoes every statement's result: keep that quiet unless something goes wrong.
@@ -51,7 +56,8 @@ export function executeOnD1(statements: readonly string[], target: "local" | "re
   });
   if (result.status !== 0) {
     process.stdout.write(result.stdout ?? "");
-    console.error(`\nwrangler d1 execute failed (SQL kept at ${file}).`);
+    console.error(`\nwrangler d1 execute failed (SQL kept at ${file}: delete it when you're done).`);
     process.exit(result.status ?? 1);
   }
+  rmSync(dir, { recursive: true, force: true });
 }
