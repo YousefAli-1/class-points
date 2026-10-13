@@ -7,6 +7,7 @@ import { Mascot } from "../../components/Mascot.tsx";
 import { Avatar, Card } from "../../components/ui/index.ts";
 import { celebrate } from "../../lib/confetti.ts";
 import { cx } from "../../lib/cx.ts";
+import { firstShowing } from "./celebrateOnce.ts";
 
 type Place = ClassReport["podium"][number];
 
@@ -21,25 +22,26 @@ const STAGE_ORDER = [2, 1, 3] as const;
 /** Names shown per place before "and N more". */
 const SHOW = 3;
 
-// The last podium that got confetti, so coming back from a student's report doesn't fire it again.
-let lastCelebrated: string | null = null;
-
 export interface PodiumProps {
   podium: ClassReport["podium"];
   students: ReadonlyMap<number, Student>;
-  /** Identifies the report (period and filter); confetti plays once per new report. */
-  celebrateKey: string;
+  /**
+   * Identifies the report (period and filter): confetti plays the first time each one is shown in
+   * this tab. `null` while the podium still shows the last period's report.
+   */
+  celebrateKey: string | null;
 }
 
-/** The top 3 by points; ties share a place (spec §8.5). Confetti on screen only. */
+/** The top 3 by points; ties share a place (spec §8.5). Confetti on screen only, never in print. */
 export function Podium({ podium, students, celebrateKey }: PodiumProps) {
   const hasWinners = podium.length > 0;
 
   useEffect(() => {
-    if (!hasWinners || lastCelebrated === celebrateKey) return;
+    if (!hasWinners || celebrateKey === null) return;
     const timer = setTimeout(() => {
-      lastCelebrated = celebrateKey;
-      celebrate("podium");
+      if (window.matchMedia?.("print").matches) return;
+      // celebrate() itself does nothing when the device asks for reduced motion.
+      if (firstShowing(celebrateKey)) celebrate("podium");
     }, 450);
     return () => clearTimeout(timer);
   }, [hasWinners, celebrateKey]);

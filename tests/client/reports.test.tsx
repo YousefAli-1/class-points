@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { todayISO } from "@shared/dates.ts";
@@ -10,6 +10,7 @@ import ReportsPage from "@client/features/reports/ReportsPage.tsx";
 import StudentReportPage from "@client/features/reports/StudentReportPage.tsx";
 import { periodSubjects } from "@client/features/reports/reportUtils.ts";
 import { useReportParams } from "@client/features/reports/useReportParams.ts";
+import { celebrate } from "@client/lib/confetti.ts";
 import { qk } from "@client/lib/queryKeys.ts";
 
 // jsdom has no canvas: keep the podium confetti out of the tests.
@@ -76,12 +77,19 @@ function Where() {
 
 function renderAt(
   url: string,
-  { boot = bootstrap(), auth = LOGGED_IN, raw = RAW }: { boot?: Bootstrap; auth?: AuthStatus; raw?: ReportRaw | null } = {},
+  {
+    boot = bootstrap(),
+    auth = LOGGED_IN,
+    raw = RAW,
+    otherWeeks = [],
+  }: { boot?: Bootstrap; auth?: AuthStatus; raw?: ReportRaw | null; otherWeeks?: readonly (typeof WEEK)[] } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   qc.setQueryData(qk.auth, auth);
   qc.setQueryData(qk.bootstrap, boot);
   if (raw) qc.setQueryData(qk.report(WEEK.from, WEEK.to), raw);
+  // The same lessons again, as the report of another week.
+  for (const w of otherWeeks) qc.setQueryData(qk.report(w.from, w.to), RAW);
   const router = createMemoryRouter(
     [
       { path: "/reports", element: <ReportsPage /> },
@@ -222,6 +230,75 @@ describe("ReportsPage", () => {
 
     expect(screen.getByRole("heading", { name: "No lessons in this period yet" })).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("podium confetti", () => {
+  // Weeks no other test opens, so nothing has cheered for them yet.
+  const NOV_1 = { from: "2026-11-01", to: "2026-11-07" };
+  const NOV_8 = { from: "2026-11-08", to: "2026-11-14" };
+  /** Past the podium's short wait before its confetti. */
+  const settle = () => act(() => vi.advanceTimersByTime(1000));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.mocked(celebrate).mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("plays once per period and filter, not again on coming back to it", () => {
+    const { router } = renderAt(`/reports?date=${NOV_1.from}`, { otherWeeks: [NOV_1, NOV_8] });
+    settle();
+    expect(celebrate).toHaveBeenCalledTimes(1);
+    expect(celebrate).toHaveBeenCalledWith("podium");
+
+    // › to the next week: a new podium, so it cheers again…
+    act(() => void router.navigate(`/reports?date=${NOV_8.from}`));
+    settle();
+    expect(celebrate).toHaveBeenCalledTimes(2);
+
+    // …but ‹ back, or leaving Reports and coming back, doesn't replay it.
+    act(() => void router.navigate(`/reports?date=${NOV_1.from}`));
+    settle();
+    cleanup();
+    renderAt(`/reports?date=${NOV_8.from}`, { otherWeeks: [NOV_8] });
+    settle();
+    expect(celebrate).toHaveBeenCalledTimes(2);
+
+    // A different subject filter is a different podium.
+    cleanup();
+    renderAt(`/reports?date=${NOV_8.from}&subjects=1`, { otherWeeks: [NOV_8] });
+    settle();
+    expect(celebrate).toHaveBeenCalledTimes(3);
+  });
+
+  it("waits for the new period's report instead of cheering over the last one", () => {
+    // Nov 1 is on screen; Nov 15's report hasn't arrived, so Nov 1's podium stays up, dimmed.
+    const { router } = renderAt(`/reports?date=${NOV_1.from}`, { raw: null, otherWeeks: [NOV_1] });
+    settle();
+    vi.mocked(celebrate).mockClear();
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {}));
+
+    act(() => void router.navigate("/reports?date=2026-11-15"));
+    settle();
+    expect(screen.getByRole("list", { name: "Podium" })).toBeTruthy();
+    expect(celebrate).not.toHaveBeenCalled();
+  });
+
+  it("remembers what it cheered for across a reload in the same tab", async () => {
+    vi.useRealTimers();
+    const before = await import("@client/features/reports/celebrateOnce.ts");
+    expect(before.firstShowing("reload-test")).toBe(true);
+    expect(before.firstShowing("reload-test")).toBe(false);
+
+    vi.resetModules();
+    const after = await import("@client/features/reports/celebrateOnce.ts");
+    expect(after).not.toBe(before);
+    expect(after.firstShowing("reload-test")).toBe(false);
+    expect(after.firstShowing("another-view")).toBe(true);
   });
 });
 

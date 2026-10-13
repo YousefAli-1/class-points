@@ -80,7 +80,7 @@ function ClassReportView({ boot }: { boot: Bootstrap }) {
           {report.podium.length > 0 ? (
             <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] print:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
               <SummaryCards report={report} beside />
-              <Podium podium={report.podium} students={studentById} celebrateKey={celebrateKey} />
+              <Podium podium={report.podium} students={studentById} celebrateKey={raw.stale ? null : celebrateKey} />
             </div>
           ) : (
             <SummaryCards report={report} />
